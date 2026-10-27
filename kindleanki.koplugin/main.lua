@@ -1,0 +1,246 @@
+--[[--
+Kindle Anki — KOReader plugin entry point.
+
+This file is deliberately thin.  It owns three things and nothing else:
+
+  * the menu entries and the dispatcher actions,
+  * the one-time host probe (see `core/capabilities.lua`),
+  * the wiring between those and the screens.
+
+Everything heavy lives in modules that unit tests can load without KOReader:
+`db/`, `sched/`, `render/`, `sync/`, `ui/`.
+
+A plugin whose `init()` raises is invisible: KOReader drops the instance and
+writes one line to crash.log, so the user sees "the plugin is installed but
+there is no menu entry".  Therefore nothing in `init()` is allowed to throw.
+]]
+
+local WidgetContainer = require("ui/widget/container/widgetcontainer")
+local logger = require("logger")
+local _ = require("gettext")
+
+local Version = require("core.version")
+local Log = require("core.log")
+local Paths = require("core.paths")
+local Capabilities = require("core.capabilities")
+local Probe = require("ui.probe")
+
+local KindleAnki = WidgetContainer:extend{
+    name = "kindleanki",
+    is_doc_only = false,
+}
+
+KindleAnki.VERSION = Version.VERSION
+
+--[[ UI widgets are required lazily, for two reasons:
+
+  1. `ui/widget/infomessage` pulls in `ui/font`, which needs a live Screen and
+     CanvasContext.  A plugin that requires it at load time cannot be loaded by
+     a headless host (and pays for font enumeration on every startup).
+  2. A failure to show a message must never propagate into a menu callback.
+]]
+local function show_message(text)
+    local ok_info, InfoMessage = pcall(require, "ui/widget/infomessage")
+    if not ok_info then
+        Log.err("cannot load infomessage:", InfoMessage)
+        return false
+    end
+    local ok_ui, UIManager = pcall(require, "ui/uimanager")
+    if not ok_ui then
+        Log.err("cannot load uimanager:", UIManager)
+        return false
+    end
+    UIManager:show(InfoMessage:new{ text = text })
+    return true
+end
+
+-- Two tabs, for the same reason the old plugin used two: the tools tab appends
+-- plugin entries below "More tools", where people scroll past them.  These ids
+-- exist in KOReader's reader/filemanager menu orders; a hint that matches
+-- nothing makes the whole main menu fail to build.
+KindleAnki.MENU_ENTRIES = {
+    { key = "kindleanki", hint = "tools" },
+    { key = "kindleanki_main", hint = "main" },
+}
+
+KindleAnki.DISPATCHER_ACTIONS = {
+    {
+        name = "kindleanki_study",
+        event = "KindleAnkiStudy",
+        title = _("Kindle Anki：开始复习"),
+    },
+    {
+        name = "kindleanki_sync",
+        event = "KindleAnkiSync",
+        title = _("Kindle Anki：立即同步"),
+    },
+}
+
+--==========================================================================
+-- Lifecycle
+--==========================================================================
+
+function KindleAnki:init()
+    Log.set_sink(function(level, message)
+        local text = Log.PREFIX .. ": " .. message
+        if level == "err" and type(logger.err) == "function" then
+            logger.err(text)
+        elseif level == "warn" and type(logger.warn) == "function" then
+            logger.warn(text)
+        elseif level == "dbg" and type(logger.dbg) == "function" then
+            logger.dbg(text)
+        elseif type(logger.info) == "function" then
+            logger.info(text)
+        else
+            print(text)
+        end
+    end)
+
+    local ok, err = pcall(function()
+        self.paths = Paths.for_koreader()
+        self.caps = Capabilities.probe{
+            ca_path = self.paths.ca_bundle,
+        }
+        Log.info(self.caps.summary)
+        if not self.caps.ok then
+            Log.err("host is missing capabilities:", table.concat(self.caps.missing, ","))
+        end
+    end)
+    if not ok then
+        Log.err("init failed:", err)
+        self.caps = {
+            values = {},
+            missing = {},
+            ok = false,
+            summary = "init failed: " .. tostring(err),
+        }
+        self.paths = nil
+    end
+
+    pcall(self.register_dispatcher_actions, self)
+    pcall(self.register_menu, self)
+end
+
+--- Register the plugin's menu tree.  Split out so `init()` can keep a single
+--- pcall around the environment work and still survive a menu failure.
+function KindleAnki:register_menu()
+    local menu = self.ui and self.ui.menu
+    if not menu or type(menu.registerToMainMenu) ~= "function" then
+        Log.warn("no main menu on self.ui; the plugin will have no menu entry")
+        return false
+    end
+    local ok, err = pcall(menu.registerToMainMenu, menu, self)
+    if not ok then
+        Log.err("registerToMainMenu failed:", err)
+        return false
+    end
+    return true
+end
+
+-- `dispatcher` is required lazily: it pulls in the file manager, and the plugin
+-- itself is loaded from inside FileManager:init(), so a top-level require would
+-- be a load loop.
+function KindleAnki:register_dispatcher_actions()
+    local ok, Dispatcher = pcall(require, "dispatcher")
+    if not ok or type(Dispatcher) ~= "table" then
+        Log.dbg("dispatcher not available")
+        return false
+    end
+    -- `_index`, not `_`: a bare `_` loop variable shadows gettext's `_`, and
+    -- the first call to `_("...")` inside the loop then dies with
+    -- "attempt to call local '_' (a number value)".  KOReader catches that in
+    -- registerToMainMenu and only logs it, so the plugin would look installed
+    -- but never appear in any menu.
+    for action_index, action in ipairs(KindleAnki.DISPATCHER_ACTIONS) do
+        pcall(function()
+            Dispatcher:registerAction(action.name, {
+                category = "none",
+                event = action.event,
+                title = action.title,
+                general = true,
+            })
+        end)
+    end
+    return true
+end
+
+function KindleAnki:onDispatcherRegisterActions()
+    self:register_dispatcher_actions()
+end
+
+--==========================================================================
+-- Menu
+--==========================================================================
+
+function KindleAnki:build_submenu()
+    return {
+        {
+            text = _("开始复习"),
+            callback = function()
+                self:onKindleAnkiStudy()
+            end,
+        },
+        {
+            text = _("立即同步"),
+            callback = function()
+                self:onKindleAnkiSync()
+            end,
+        },
+        {
+            text = _("诊断"),
+            callback = function()
+                self:show_diagnostics()
+            end,
+        },
+        {
+            text = _("关于"),
+            callback = function()
+                self:show_about()
+            end,
+        },
+    }
+end
+
+function KindleAnki:addToMainMenu(menu_items)
+    for entry_index, entry in ipairs(KindleAnki.MENU_ENTRIES) do
+        menu_items[entry.key] = {
+            text = _("Kindle Anki"),
+            sorting_hint = entry.hint,
+            sub_item_table = self:build_submenu(),
+        }
+    end
+end
+
+--==========================================================================
+-- Actions (M0: honest placeholders; M1/M3 replace these bodies)
+--==========================================================================
+
+function KindleAnki:onKindleAnkiStudy()
+    show_message(_("复习界面将在 M1/M2 接入（牌组 → 复习）。"))
+    return true
+end
+
+function KindleAnki:onKindleAnkiSync()
+    show_message(_("同步将在 M3 接入（登录 → 拉取 → 推送）。"))
+    return true
+end
+
+function KindleAnki:show_diagnostics()
+    Probe.show(self.caps, KindleAnki.VERSION)
+    return true
+end
+
+function KindleAnki:show_about()
+    local lines = {
+        string.format("%s %s", _("Kindle Anki"), KindleAnki.VERSION),
+        "",
+        _("目标：在 Kindle（KOReader）上复习 Anki 卡片，并与 AnkiWeb 同步。"),
+        _("数据目录：") .. tostring(self.paths and self.paths.root or "n/a"),
+        "",
+        _("许可：AGPL-3.0-or-later"),
+    }
+    show_message(table.concat(lines, "\n"))
+    return true
+end
+
+return KindleAnki
