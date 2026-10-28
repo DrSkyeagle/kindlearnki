@@ -14,14 +14,50 @@ the runner says so instead of silently reporting "0 passed".
 local source = debug.getinfo(1, "S").source:sub(2)
 local tests_dir = source:match("^(.*)[/\\][^/\\]*$") or "."
 local plugin_root = tests_dir .. "/.."
+local repo_root = plugin_root .. "/.."
 
 package.path = table.concat({
     plugin_root .. "/?.lua",
     tests_dir .. "/?.lua",
+    -- KOReader ships lua-ljsqlite3 under <koreader>/common/; the vendored test
+    -- shim mirrors that layout so `require("lua-ljsqlite3/init")` resolves the
+    -- same way it does on the device.
+    repo_root .. "/harness/krsim/common/?.lua",
+    repo_root .. "/harness/krsim/?.lua",
     package.path,
 }, ";")
 
 local filter = arg and arg[1] or nil
+
+--[[ Windows-only: lua-ljsqlite3 reads `ffi.C.free` while building its module
+environment.  LuaJIT's C namespace on Windows does not export libc's free, so
+the module cannot load as-is.  The plugin never binds a BLOB (the only user of
+that symbol), so a no-op is enough here.  On the device, and in WSL against the
+KOReader tree, the real symbol resolves and this block does nothing. ]]
+local function install_windows_sqlite_shim()
+    if package.config:sub(1, 1) ~= "\\" then
+        return
+    end
+    package.loaded["ffi/posix_h"] = true
+    local ffi = require("ffi")
+    if type(ffi.loadlib) ~= "function" then
+        ffi.loadlib = function(name)
+            return ffi.load(name)
+        end
+    end
+    local path = repo_root .. "/harness/krsim/common/lua-ljsqlite3/init.lua"
+    local file = io.open(path, "rb")
+    if not file then
+        return
+    end
+    local source_text = file:read("*a")
+    file:close()
+    source_text = source_text:gsub("free%s*=%s*C%.free", "free = function() end")
+    local chunk = assert(loadstring(source_text, "@" .. path))
+    package.loaded["lua-ljsqlite3/init"] = chunk()
+end
+
+install_windows_sqlite_shim()
 
 local function list_test_files()
     local files = {}

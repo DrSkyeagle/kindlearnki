@@ -212,11 +212,70 @@ function KindleAnki:addToMainMenu(menu_items)
 end
 
 --==========================================================================
--- Actions (M0: honest placeholders; M1/M3 replace these bodies)
+-- Collection lifecycle
+--==========================================================================
+
+local function file_exists(path)
+    local file = io.open(path, "rb")
+    if file then
+        file:close()
+        return true
+    end
+    return false
+end
+
+--- Open the local collection on demand.
+-- Opening at plugin load would lock the file for the whole KOReader session and
+-- would make "the plugin failed to load" indistinguishable from "the database
+-- is locked", so it happens when a screen actually needs it.
+function KindleAnki:open_collection()
+    if self.collection then
+        return self.collection
+    end
+    if not self.paths then
+        return nil, "插件未初始化（路径不可用）"
+    end
+    if not file_exists(self.paths.collection) then
+        return nil, "还没有本地库：请先登录并同步一次"
+    end
+    local ok, collection = pcall(function()
+        local Model = require("model.collection")
+        return Model.open(self.paths.collection)
+    end)
+    if not ok then
+        Log.err("open collection failed:", collection)
+        return nil, "打开本地库失败：" .. tostring(collection)
+    end
+    self.collection = collection
+    return collection
+end
+
+function KindleAnki:close_collection()
+    if self.collection then
+        pcall(self.collection.close, self.collection)
+        self.collection = nil
+    end
+end
+
+--==========================================================================
+-- Actions
 --==========================================================================
 
 function KindleAnki:onKindleAnkiStudy()
-    show_message(_("复习界面将在 M1/M2 接入（牌组 → 复习）。"))
+    local collection, err = self:open_collection()
+    if not collection then
+        show_message(tostring(err))
+        return true
+    end
+
+    local ok, result = xpcall(function()
+        local Controller = require("study.controller")
+        return Controller.show_decks(collection)
+    end, debug.traceback)
+    if not ok then
+        Log.err("study screen failed:", result)
+        show_message(_("打开复习界面失败，详情见 crash.log。"))
+    end
     return true
 end
 
@@ -242,5 +301,4 @@ function KindleAnki:show_about()
     show_message(table.concat(lines, "\n"))
     return true
 end
-
 return KindleAnki

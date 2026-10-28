@@ -60,17 +60,56 @@ def _states_dict(states) -> dict:
     return MessageToDict(states, preserving_proto_field_name=True)
 
 
+def _lua(value, indent=0):
+    """Serialise a JSON-ish value as a Lua table literal.
+
+    The Lua test suite has no JSON decoder yet (the sync layer owns that), and
+    emitting a table keeps the differential test independent of it.
+    """
+    pad = "  " * indent
+    child = "  " * (indent + 1)
+    if isinstance(value, dict):
+        if not value:
+            return "{}"
+        lines = ["{"]
+        for key in sorted(value, key=str):
+            lines.append(f'{child}["{key}"] = {_lua(value[key], indent + 1)},')
+        lines.append(pad + "}")
+        return "\n".join(lines)
+    if isinstance(value, list):
+        if not value:
+            return "{}"
+        lines = ["{"]
+        for item in value:
+            lines.append(f"{child}{_lua(item, indent + 1)},")
+        lines.append(pad + "}")
+        return "\n".join(lines)
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return "nil"
+    if isinstance(value, (int, float)):
+        return repr(value)
+    escaped = str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+    return f'"{escaped}"'
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--collection", required=True)
     parser.add_argument("--limit", type=int, default=30)
     parser.add_argument("--out", default="-")
+    parser.add_argument("--format", choices=("json", "lua"), default="json")
+    parser.add_argument("--deck", type=int, default=None,
+                        help="activate this deck before dumping")
     args = parser.parse_args(argv)
 
     workdir, path = _copy_collection(args.collection)
     try:
         col = Collection(path)
         try:
+            if args.deck is not None:
+                col.decks.select(args.deck)
             counts = col.sched.counts()
             # 26.09 returns a plain (new, learning, review) tuple; older
             # bindings returned an object with named fields.
@@ -90,6 +129,7 @@ def main(argv=None) -> int:
             queued = col.sched.get_queued_cards(fetch_limit=args.limit)
             payload = {
                 "source": os.path.abspath(args.collection),
+                "today": int(col.sched.today),
                 "counts": counts_dict,
                 "queued": [
                     {
@@ -105,13 +145,17 @@ def main(argv=None) -> int:
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
 
-    text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
+    if args.format == "lua":
+        # Wrap in a function so `dofile` returns the table.
+        text = "return " + _lua(payload) + "\n"
+    else:
+        text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     if args.out == "-":
-        sys.stdout.write(text + "\n")
+        sys.stdout.write(text)
     else:
         os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
         with open(args.out, "w", encoding="utf-8") as handle:
-            handle.write(text + "\n")
+            handle.write(text)
         print(f"wrote {args.out} ({len(payload['queued'])} queued cards)")
     return 0
 
