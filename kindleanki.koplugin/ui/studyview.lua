@@ -48,8 +48,6 @@ end
 
 -- The page-turn keys answer "记住" (3) on the back face; AnkiDroid's middle
 -- rating.  Named here so the keybinding and the rating column cannot drift.
-local ADVANCE_RATING = 3
-
 local StudyView = InputContainer:extend{
     name = "kindleanki_studyview",
     covers_fullscreen = true,
@@ -119,13 +117,17 @@ function StudyView:init()
 
     if Device:hasKeys() and Device.input then
         local Input = Device.input
-        -- Both page-turn keys are bound to the same state-dependent action, so
-        -- the rocker works the same whichever way it is pressed: front shows the
-        -- answer, back rates it 记住.  (PgBack is *not* "back": Voyage has no
-        -- back key, and leaving PgBack unbound would make the rocker feel broken.)
+        --[[ PagePress is the card's own pager, not the review flow.
+
+        These decks contain cards several screens tall, and scrolling does not
+        exist on e-ink, so the rocker has to page the *body*.  Showing the
+        answer / rating stays on the touch targets (the full-width bar and the
+        four columns), which is also what the design specifies.  PgBack is not
+        "back" on a Voyage -- there is no Back key there -- so neither key is
+        bound to Close; exiting is the × hot zone. ]]
         self.key_events = {
-            AdvanceForward = { { Input.group.PgFwd }, event = "Advance" },
-            AdvanceBackward = { { Input.group.PgBack }, event = "Advance" },
+            PageForward = { { Input.group.PgFwd }, event = "PageForward" },
+            PageBackward = { { Input.group.PgBack }, event = "PageBackward" },
             Close = { { Input.group.Back }, event = "Close" },
         }
     end
@@ -489,13 +491,32 @@ function StudyView:_tap_body()
     end
 end
 
---- Page-turn keys / PagePress rocker.
-function StudyView:onAdvance()
-    if self.show_answer then
-        self:_rate(ADVANCE_RATING)
-    else
-        self:_show_answer()
+--- Page an oversized card backward.  Returns false when already on page 1.
+function StudyView:previous_body_page()
+    if self.body_mode ~= "html" or not self.body then
+        return false
     end
+    if self.body_page <= 1 then
+        return false
+    end
+    self.body_page = self.body_page - 1
+    pcall(function()
+        self.body:setPageNumber(self.body_page)
+        self.body:freeBb()
+    end)
+    UIManager:setDirty(self, "ui")
+    return true
+end
+
+--- PagePress forward: next body page, or nothing when the card fits one page.
+function StudyView:onPageForward()
+    self:next_body_page()
+    return true
+end
+
+--- PagePress backward: previous body page.
+function StudyView:onPageBackward()
+    self:previous_body_page()
     return true
 end
 
@@ -643,3 +664,4 @@ function StudyView:onTapStudy(_, ges)
 end
 
 return StudyView
+

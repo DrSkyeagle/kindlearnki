@@ -124,5 +124,78 @@ study_view:update_face({ html = wrap(faces.answer_html), css = css }, true,
     session:progress(), item.intervals, item.context.deck_name)
 shot("03-card-answer")
 
+-- 3. a long card: the PagePress rocker must page the body (the reason the
+-- keys are not bound to "show answer" on these decks).
+local all_cards = {}
+for _, deck in ipairs(collection.decks) do
+    for _, card in ipairs(collection:cards_in_decks({ deck.id })) do
+        all_cards[#all_cards + 1] = card
+    end
+end
+local longest, longest_len = nil, 0
+for _, card in ipairs(all_cards) do
+    local note = collection:note(card.nid)
+    local total = 0
+    for _, field in ipairs(note and note.fields or {}) do
+        total = total + #field
+    end
+    if total > longest_len then
+        longest, longest_len = card, total
+    end
+end
+assert(longest, "no card found")
+
+local long_note = collection:note(longest.nid)
+local long_notetype = collection:notetype(long_note.mid)
+local long_faces = Render.card_faces(long_notetype, long_note, longest, {})
+local long_css = long_faces.css or long_notetype.css or ""
+local long_html = string.format('<div class="card card%s">%s</div>',
+    tostring((longest.ord or 0) + 1), long_faces.question_html)
+
+local long_study = StudyView:new{
+    face = { html = long_html, css = long_css },
+    show_answer = false,
+    progress = { done = 0, remaining = 1 },
+    intervals = { "1m", "10m", "1d", "4d" },
+    deck_name = item.context.deck_name,
+    on_show_answer = function() end,
+    on_rate = function() end,
+    on_close = function() end,
+}
+long_study:show()
+logger.info(string.format("kindleanki-shot longest real card chars=%d pages=%d",
+    longest_len, tonumber(long_study.body_page_count) or 1))
+shot("04-long-page1")
+
+if (tonumber(long_study.body_page_count) or 1) <= 1 then
+    -- The fixture has no card tall enough to paginate.  Prove the pager with a
+    -- synthetic face rather than shipping a key binding nobody has exercised.
+    local filler = {}
+    for line = 1, 80 do
+        filler[#filler + 1] = string.format(
+            "<p>第 %d 行：这是一张用于验证翻页键的长卡片，按 PagePress 应该向下翻一页。</p>",
+            line)
+    end
+    long_study:update_face({
+        html = '<div class="card">' .. table.concat(filler) .. "</div>",
+        css = long_css,
+    }, false, { done = 0, remaining = 1 }, { "1m", "10m", "1d", "4d" })
+    logger.info("kindleanki-shot synthetic long card pages="
+        .. tostring(long_study.body_page_count))
+    shot("04-long-page1")
+end
+
+local pages = tonumber(long_study.body_page_count) or 1
+assert(pages >= 2, "long card did not paginate (pages=" .. tostring(pages) .. ")")
+
+long_study:onPageForward()
+logger.info("kindleanki-shot page-forward page=" .. tostring(long_study.body_page))
+assert(long_study.body_page == 2, "forward paging did not reach page 2")
+shot("05-long-page2")
+
+long_study:onPageBackward()
+logger.info("kindleanki-shot page-backward page=" .. tostring(long_study.body_page))
+assert(long_study.body_page == 1, "backward paging did not return to page 1")
+
 logger.info("kindleanki-shot done")
 os.exit(0)
