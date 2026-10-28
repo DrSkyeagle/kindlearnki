@@ -1,6 +1,6 @@
 # 调度规范（Anki v3 核心）
 
-> 状态：**§1 已写**（时间与跨天）；§2 起待写。
+> 状态：**0.2.0 已实现 §1 + v3 核心**（new/learning/review/relearning、限额、leech、bury、跨天）；筛选牌组/自定义学习/FSRS/负载均衡不做。
 > 规则：代码不得超出本文件；每条规则标注 `anki-26.09.3/rslib/src/...` 的出处。
 > 目标：与 AnkiDroid 2.16.5 / 桌面 Anki 共用同一个集合时，**队列顺序一致、间隔落在允许区间内**。
 > 明确不追求逐值一致：v3 的间隔 fuzz 是随机的（见 §4 待写）。
@@ -80,3 +80,4 @@ next_day_at = rollover_passed ? rollover_today + 1 天 : rollover_today
 ## 7. 验收方法（待写）
 
 与 `.venv` 的 anki 26.09.3 对拍：同一夹具 + 同一作答序列 → 队列顺序逐条一致、间隔在区间内。
+

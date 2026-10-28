@@ -31,7 +31,7 @@ local M = {}
 --- Wire identity. Kept in sync with `core/version.lua` by hand: version.lua is
 --- the release identity, this is what goes on the wire, and tests pin the
 --- shape (`anki,<ver> (kindleanki),koreader`) rather than loose matching.
-M.VERSION = "0.1.0-dev"
+M.VERSION = "0.2.0"
 
 M.ENDPOINT_DEFAULT = "https://sync.ankiweb.net/"
 
@@ -360,3 +360,4 @@ function M.body_sanity_check2(client)
 end
 
 return M
+

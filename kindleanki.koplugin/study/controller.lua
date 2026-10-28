@@ -147,9 +147,9 @@ function Controller.start_study(collection, deck_id, parent_view)
         end,
         on_close = function()
             Controller.close(view)
-            if parent_view then
-                parent_view:show()
-            end
+            -- The deck list is still in the widget stack underneath; closing
+            -- the study screen reveals it.  Re-showing it here would raise
+            -- "already shown".
         end,
     }
     view:show()

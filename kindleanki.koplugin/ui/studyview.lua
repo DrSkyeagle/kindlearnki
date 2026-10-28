@@ -417,7 +417,7 @@ function StudyView:_layout()
     layout.progress_y = progress_y
 
     --== 正文区（垂直居中）=============================================
-    local body_top = progress_y + px(Tokens.size.progress) + gap
+    local body_top = progress_y + Tokens.size.progress + gap
     -- One action band height for both faces: revealing the answer must not move
     -- the body box, or every reveal would need a fresh MuPDF layout.
     local action_h = px(Tokens.size.action_bar)
@@ -535,12 +535,12 @@ function StudyView:paintTo(bb, x, y)
     local done_w = math.floor(progress_w * layout.progress_fraction)
     if done_w > 0 then
         Widgets.rule(bb, x + layout.content_x, y + layout.progress_y,
-            done_w, px(Tokens.size.progress), colors.ink)
+            done_w, Tokens.size.progress, colors.ink)
     end
     if done_w < progress_w then
         Widgets.dotted_rule(bb, x + layout.content_x + done_w, y + layout.progress_y,
             progress_w - done_w, colors.ink,
-            Tokens.size.dot, Tokens.size.dot_gap, px(Tokens.size.progress))
+            px(Tokens.size.dot), px(Tokens.size.dot_gap), Tokens.size.progress)
     end
 
     --== 正文 ==========================================================
@@ -550,7 +550,7 @@ function StudyView:paintTo(bb, x, y)
     local action = layout.action
     if self.show_answer then
         Widgets.rule(bb, x + action.x, y + action.y, action.w,
-            px(Tokens.size.progress), colors.ink)
+            Tokens.size.progress, colors.ink)
         local rating_metrics = Widgets.metrics(faces.rating)
         local interval_metrics = Widgets.metrics(faces.interval)
         local line_gap = math.floor(layout.gap / 2)

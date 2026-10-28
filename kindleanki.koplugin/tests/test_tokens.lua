@@ -67,7 +67,7 @@ return {
 
     ["body copy is 20 on the serif face, falling back to cfont"] = function()
         assert(Tokens.font.body == 20, tostring(Tokens.font.body))
-        assert(Tokens.font.family == "tfont", Tokens.font.family)
+        assert(Tokens.font.family == "NotoSerif-Regular.ttf", Tokens.font.family)
         assert(Tokens.font.fallback == "cfont", Tokens.font.fallback)
     end,
 
@@ -156,19 +156,19 @@ return {
     ["face() uses the serif face when the host has it"] = function()
         local face = Tokens.face(20, injected_require(fake_font()))
         assert(type(face) == "table", tostring(face))
-        assert(face.name == "tfont", tostring(face.name))
+        assert(face.name == "NotoSerif-Regular.ttf", tostring(face.name))
         assert(face.orig_size == 20, tostring(face.orig_size))
     end,
 
     ["face() falls back to cfont and logs why when the serif face is missing"] = function()
         local logged = {}
-        local face = Tokens.face(20, injected_require(fake_font({ tfont = true }), function(message)
+        local face = Tokens.face(20, injected_require(fake_font({ [Tokens.font.family] = true }), function(message)
             logged[#logged + 1] = tostring(message)
         end))
         assert(type(face) == "table", tostring(face))
         assert(face.name == "cfont", tostring(face.name))
         assert(#logged >= 1, "the fallback must be logged, not swallowed")
-        assert(logged[1]:find("tfont", 1, true), logged[1])
+        assert(logged[1]:find("NotoSerif-Regular.ttf", 1, true), logged[1])
         assert(logged[1]:find("cfont", 1, true), logged[1])
     end,
 
@@ -188,7 +188,7 @@ return {
     end,
 
     ["face() returns nil when even the fallback face fails"] = function()
-        local face = Tokens.face(20, injected_require(fake_font({ tfont = true, cfont = true })))
+        local face = Tokens.face(20, injected_require(fake_font({ [Tokens.font.family] = true, [Tokens.font.fallback] = true })))
         assert(face == nil, tostring(face))
     end,
 
@@ -197,3 +197,5 @@ return {
             "ui/tokens.lua leaked global(s): " .. table.concat(leaked_globals, ", "))
     end,
 }
+
+

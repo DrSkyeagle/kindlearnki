@@ -57,15 +57,19 @@ function DeckList.build(collection, opts)
         }
     end
 
-    local root = collection:deck(1) or sorted[1]
-    local total_counts = Queue.counts(collection, root.id, now, today)
-    local total = 0
-    for _, deck in ipairs(decks) do
-        if deck.id == root.id then
-            total = deck.total
-            break
+    -- "All decks" is not a real Anki deck: deck 1 is the default deck and other
+    -- top-level decks are its siblings.  Sum the top-level subtrees so the
+    -- footer cannot silently read 0 because deck 1 itself holds no cards.
+    local total_counts = { new = 0, learning = 0, review = 0 }
+    for _, deck in ipairs(sorted) do
+        if not deck.parent then
+            local counts = Queue.counts(collection, deck.id, now, today)
+            for key in pairs(total_counts) do
+                total_counts[key] = total_counts[key] + counts[key]
+            end
         end
     end
+    local total = total_counts.new + total_counts.learning + total_counts.review
 
     return {
         date_text = weekday_text(now),

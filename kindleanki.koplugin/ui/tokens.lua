@@ -41,10 +41,12 @@ Tokens.color = {
 Tokens.font = {
     -- Body copy: the design's one typographic anchor.
     body = 20,
-    -- Serif body face.  `tfont` is KOReader's serif family and its fallback list
-    -- already carries Noto Serif CJK; `cfont` is the sans UI font used when a
-    -- build ships without the serif family.
-    family = "tfont",
+    -- Serif body face.  KOReader's `tfont` alias is NotoSans-*Bold* in this
+    -- release (the serif line in ui/font.lua is commented out), so asking for
+    -- it would give the "paper" design a heavy sans body.  Use the bundled
+    -- Noto Serif by file name instead: Font:getFace() accepts a raw file name
+    -- and falls back to `cfont` below when a build does not ship it.
+    family = "NotoSerif-Regular.ttf",
     fallback = "cfont",
     -- 1.65 line pitch, i.e. the 0.65 extra line height a TextBoxWidget wants.
     line_height = 1.65,
@@ -84,20 +86,25 @@ Tokens.space = {
 }
 
 --==========================================================================
--- Size (unscaled design units)
+-- Size
 --==========================================================================
 
+--- Two kinds of number live here, and the screens never mix them up:
+---   * line thicknesses are PHYSICAL pixels (a "1px 墨线" is one pixel of the
+---     panel, not one design unit scaled up to two),
+---   * everything else is an unscaled design unit and goes through
+---     `Screen:scaleBySize()` (a 44dp touch target, a 64 unit action bar).
 Tokens.size = {
-    hairline = 1,     -- 1px 墨线
-    progress = 2,     -- 复习页 2px 进度线
-    dot = 1,          -- 点线（点径）
-    dot_gap = 6,      -- 点线（点距）
-    exit_hit = 44,    -- 退出热区最小边；Voyage 无返回键，这是唯一退出口
-    action_bar = 64,  -- 正面黑条 / 背面评分列，同一高度：换面时正文区不跳动
-    footer = 48,      -- 全部牌组一起复习
-    menu = 44,        -- 底部 菜单 行
-    row_min = 30,     -- 牌组行高下限
-    row_max = 64,     -- 牌组行高上限
+    hairline = 1,     -- 物理像素：1px 墨线
+    progress = 2,     -- 物理像素：复习页 2px 进度线
+    dot = 1,          -- 设计单位：点线点径
+    dot_gap = 6,      -- 设计单位：点线点距
+    exit_hit = 44,    -- 设计单位（=dp）：退出热区最小边；Voyage 无返回键，这是唯一退出口
+    action_bar = 64,  -- 设计单位：正面黑条 / 背面评分列，同一高度保证换面时正文区不跳动
+    footer = 48,      -- 设计单位：全部牌组一起复习
+    menu = 44,        -- 设计单位：底部 菜单 行
+    row_min = 30,     -- 设计单位：牌组行高下限
+    row_max = 64,     -- 设计单位：牌组行高上限
 }
 
 --==========================================================================
@@ -259,3 +266,4 @@ function Tokens.face(size, options)
 end
 
 return Tokens
+

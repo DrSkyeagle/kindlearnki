@@ -65,7 +65,7 @@ local FULL_REVLOG = {
 
 return {
     ["constants match sync protocol v11"] = function()
-        eq(protocol.VERSION, "0.1.0-dev")
+        eq(protocol.VERSION, require("core.version").VERSION)
         eq(protocol.ENDPOINT_DEFAULT, "https://sync.ankiweb.net/")
         eq(protocol.SCHEMA_VERSION, 11)
         eq(protocol.USER_AGENT_PREFIX, "anki")
@@ -329,3 +329,4 @@ return {
         eq(finished.chunk.done, false, "done must be a JSON boolean")
     end,
 }
+

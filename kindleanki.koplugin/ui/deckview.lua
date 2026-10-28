@@ -180,6 +180,11 @@ function DeckView:_layout()
         content_right = content_right,
         content_w = content_w,
         gap = gap,
+        -- Scaled once here so `paintTo` recomputes nothing but positions.
+        indent = indent,
+        dot_size = px(Tokens.size.dot),
+        dot_gap = px(Tokens.size.dot_gap),
+        hairline = Tokens.size.hairline,
         zones = {},
     }
     local zones = layout.zones
@@ -226,9 +231,13 @@ function DeckView:_layout()
     local total_face = faces.total
     for _, units in ipairs({ Tokens.font.total, 64, 48, 36 }) do
         local face = Tokens.face(units)
-        if face and Widgets.text_width(face, total_text) <= content_w then
+        if face then
+            -- Keep the smallest attempt as the fallback: a total that still
+            -- does not fit then overflows the least instead of the most.
             total_face = face
-            break
+            if Widgets.text_width(face, total_text) <= content_w then
+                break
+            end
         end
     end
     layout.total_face = total_face
@@ -398,14 +407,14 @@ function DeckView:paintTo(bb, x, y)
         Widgets.draw(bb, x + layout.content_x, y + layout.empty_baseline,
             faces.meta, layout.empty_text, colors.ink)
     end
-    local indent = Screen:scaleBySize(Tokens.space.indent)
-    local dot_size = Screen:scaleBySize(Tokens.size.dot)
+    local indent = layout.indent
+    local dot_size = layout.dot_size
     for _, row in ipairs(layout.rows) do
         -- 子牌组左侧竖线：每层一根，逐行首尾相接看起来是连续的
         for level = 1, row.depth do
             local line_x = layout.content_x + math.floor((level - 0.5) * indent)
             Widgets.rect(bb, x + line_x, y + row.row_top,
-                Tokens.size.hairline, row.row_h, colors.ink)
+                layout.hairline, row.row_h, colors.ink)
         end
         Widgets.draw(bb, x + row.name_x, y + row.baseline,
             faces.deck, row.name, colors.ink,
@@ -415,9 +424,9 @@ function DeckView:paintTo(bb, x, y)
         local dots_right = row.count_x - layout.gap
         if dots_right > dots_x then
             Widgets.dotted_rule(bb, x + dots_x,
-                y + row.baseline - dot_size - Screen:scaleBySize(3),
+                y + row.baseline - dot_size - math.floor(layout.gap / 3),
                 dots_right - dots_x, colors.ink,
-                dot_size, Screen:scaleBySize(Tokens.size.dot_gap))
+                dot_size, layout.dot_gap, dot_size)
         end
         Widgets.draw(bb, x + row.count_x, y + row.baseline,
             faces.deck_count, row.count_text, colors.ink)
