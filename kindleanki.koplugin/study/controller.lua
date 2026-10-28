@@ -91,12 +91,28 @@ function Controller.start_study(collection, deck_id, parent_view)
             local first = item.note and item.note.fields[1] or ""
             return { html = "<div>" .. first .. "</div>", css = "" }
         end
+
         local faces = Render.card_faces(item.notetype, item.note, item.card,
             item.context)
+        local css = faces.css or (item.notetype and item.notetype.css) or ""
+
+        -- The sanitizer strips class/id (it treats card content as hostile),
+        -- but Anki's own CSS targets `.card` / `.cloze`.  Wrapping *after*
+        -- sanitising gives the stylesheet its hooks without trusting the card.
+        local function wrap(html, extra_class)
+            local classes = "card"
+            if extra_class then
+                classes = classes .. " " .. extra_class
+            end
+            return string.format('<div class="%s">%s</div>', classes, html or "")
+        end
+
+        local card_class = "card" .. tostring((item.card.ord or 0) + 1)
         return {
-            html = faces.question_html,
-            css = item.notetype and item.notetype.css or "",
-            answer_html = faces.answer_html,
+            html = wrap(faces.question_html, card_class),
+            answer_html = wrap(faces.answer_html, card_class),
+            css = css,
+            media = faces.media,
         }
     end
 

@@ -54,6 +54,16 @@ M.null = NULL
 local ARRAY_MT = { __jsontype = "array" }
 local OBJECT_MT = { __jsontype = "object" }
 
+--[[-- Explicit array lengths for decoded arrays.
+--
+-- Lua's `#` is a *border*, not a length: after decoding `[1,null,3]` the
+-- table is `{[1]=1,[3]=3}` and `#` may answer 1, which would silently drop
+-- the trailing elements on re-encode. JSON nulls are legal in arrays, and a
+-- response should round-trip byte-for-byte even when one appears, so decoded
+-- arrays record their real length here. Weak keys: the entry disappears with
+-- the array, and nothing is visible to callers iterating the table. ]]
+local array_lengths = setmetatable({}, { __mode = "k" })
+
 --- Force a table to encode as a JSON array (needed for empty arrays).
 function M.array(tbl)
     return setmetatable(tbl or {}, ARRAY_MT)
@@ -164,7 +174,7 @@ local encode_value
 local function encode_table(value, out)
     if is_dense_array(value) then
         out[#out + 1] = "["
-        local length = #value
+        local length = math.max(array_lengths[value] or 0, #value)
         for index = 1, length do
             if index > 1 then
                 out[#out + 1] = ","
@@ -365,6 +375,7 @@ local function decode_array(text, position)
     local count = 0
     index = skip_whitespace(text, index)
     if text:sub(index, index) == "]" then
+        array_lengths[out] = 0
         return out, index + 1
     end
     while true do
@@ -380,6 +391,7 @@ local function decode_array(text, position)
         if char == "," then
             index = index + 1
         elseif char == "]" then
+            array_lengths[out] = count
             return out, index + 1
         else
             decode_error(text, index, "数组元素之间缺少逗号")

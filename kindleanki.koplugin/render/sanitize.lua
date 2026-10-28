@@ -210,15 +210,15 @@ local function url_scheme(value)
     probe = probe:gsub("&colon;", ":")
     probe = probe:gsub("[%z\1-\32]", "")
     probe = probe:gsub("\\", "")
+    -- Lowercase again: decoding an entity can introduce an uppercase letter
+    -- (`&#72;TTPS:`), which must not hide the scheme from the check.
+    probe = probe:lower()
     return probe:match("^([%a][%w%+%-%.]*):")
 end
 
-local DANGEROUS_SCHEMES = {
-    javascript = true, data = true, file = true, vbscript = true,
-}
-
 --- img src: relative URLs and http(s) are fine; anything with a dangerous
---- scheme is not.
+--- scheme (javascript:, data:, file:, vbscript:, ...) is not.  Accepting only
+--- these schemes is the whitelist; there is no blacklist to forget to update.
 local function is_safe_image_url(value)
     local scheme = url_scheme(value)
     if scheme == nil then
@@ -485,7 +485,9 @@ local function rebuild_tag(name, attributes_text)
                 if attribute_name == "style" then
                     local css = M.css(value)
                     if css ~= "" then
-                        keep = css
+                        -- The declaration list is newline-separated; an
+                        -- attribute value must stay on one line.
+                        keep = css:gsub("%s*\n%s*", " ")
                     end
                 elseif attribute_name == "href" then
                     if is_safe_link_url(value) then

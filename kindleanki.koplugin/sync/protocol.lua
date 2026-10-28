@@ -274,17 +274,18 @@ function M.body_apply_changes(changes)
         changes = {}
     end
     local decks = type(changes.decks) == "table" and changes.decks or {}
+    local function as_array(value)
+        return json.array(type(value) == "table" and value or {})
+    end
     local normalized = {
-        models = json.array(type(changes.models) == "table"
-            and changes.models or {}),
+        models = as_array(changes.models),
         -- A 2-tuple: (decks added/updated, decks removed). Both slots must
         -- exist and be arrays even when empty.
         decks = json.array({
-            json.array(decks[1] or {}),
-            json.array(decks[2] or {}),
+            as_array(decks[1]),
+            as_array(decks[2]),
         }),
-        tags = json.array(type(changes.tags) == "table"
-            and changes.tags or {}),
+        tags = as_array(changes.tags),
     }
     -- Pre-schema-18 clients may still send these; pass them through rather
     -- than dropping a field the server might be looking at.

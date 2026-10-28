@@ -337,6 +337,21 @@ function Collection:cards_in_decks(deck_ids)
     return cards
 end
 
+--- Re-open after the file on disk was replaced (full sync download).
+function Collection:reload()
+    self:close()
+    self.conn = Conn.open(self.path)
+    local ok, err = Collation.install(self.conn)
+    self.collation = ok and true or false
+    self.collation_error = ok and nil or tostring(err)
+    self.decks = {}
+    self.decks_by_id = {}
+    self.deck_configs = {}
+    self.decks_loaded = false
+    self.notetypes = {}
+    self:load_meta()
+end
+
 function Collection:close()
     if self.conn then
         self.conn:close()

@@ -18,7 +18,7 @@ Input shapes are the ones `model.collection` produces:
 
     { question_html = "...", answer_html = "...",
       media = { ["cat.png"] = true }, css = "...",
-      errors = { ... }, ok = true|false }
+      errors = { ... }, error = <first error or nil>, ok = true|false }
 
 Field values are HTML and are emitted verbatim: the note type owns its markup,
 and re-escaping it would show `<b>` to the user as literal text.
@@ -689,7 +689,7 @@ local function card_faces_impl(notetype, note, card, context)
     local question_html
     local question_nodes, question_error = parse_template(question_template)
     if question_nodes then
-        question_html = render_face(question_nodes, ctx)
+        question_html = render_face(question_nodes.children, ctx)
     else
         errors[#errors + 1] = "question template: " .. tostring(question_error)
         question_html = question_template
@@ -703,7 +703,7 @@ local function card_faces_impl(notetype, note, card, context)
     local answer_html
     local answer_nodes, answer_error = parse_template(answer_template)
     if answer_nodes then
-        answer_html = render_face(answer_nodes, ctx)
+        answer_html = render_face(answer_nodes.children, ctx)
     else
         errors[#errors + 1] = "answer template: " .. tostring(answer_error)
         answer_html = answer_template
@@ -722,6 +722,8 @@ local function card_faces_impl(notetype, note, card, context)
         -- owning it) decides whether to pass it through render/sanitize.lua.
         css = to_text(notetype.css),
         errors = errors,
+        -- Convenience alias for callers that only want the first problem.
+        error = errors[1],
         ok = #errors == 0,
     }
 end
@@ -731,7 +733,7 @@ end
 -- @tparam table note     decoded note
 -- @tparam table card     at least { ord = <number> }
 -- @tparam table context  { deck_name = ..., card_name = ... }
--- @treturn table { question_html, answer_html, media, css, errors, ok }
+-- @treturn table { question_html, answer_html, media, css, errors, error, ok }
 function M.card_faces(notetype, note, card, context)
     notetype = type(notetype) == "table" and notetype or {}
     note = type(note) == "table" and note or {}
@@ -759,6 +761,7 @@ function M.card_faces(notetype, note, card, context)
         media = {},
         css = to_text(notetype.css),
         errors = { "render failed: " .. tostring(result) },
+        error = "render failed: " .. tostring(result),
         ok = false,
     }
 end

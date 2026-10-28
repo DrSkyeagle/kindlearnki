@@ -279,8 +279,224 @@ function KindleAnki:onKindleAnkiStudy()
     return true
 end
 
+--==========================================================================
+-- Sync
+--==========================================================================
+
+function KindleAnki:settings()
+    if self.lua_settings then
+        return self.lua_settings
+    end
+    if not self.paths then
+        return nil
+    end
+    local ok, LuaSettings = pcall(require, "luasettings")
+    if not ok then
+        return nil
+    end
+    self.lua_settings = LuaSettings:open(self.paths.settings_file)
+    return self.lua_settings
+end
+
+function KindleAnki:read_setting(key, default)
+    local settings = self:settings()
+    if not settings then
+        return default
+    end
+    local value = settings:readSetting(key)
+    if value == nil then
+        return default
+    end
+    return value
+end
+
+function KindleAnki:save_setting(key, value)
+    local settings = self:settings()
+    if not settings then
+        return
+    end
+    settings:saveSetting(key, value)
+    settings:flush()
+end
+
+function KindleAnki:build_client()
+    local Client = require("sync.client")
+    local Transport = require("sync.transport")
+    return Client.new{
+        endpoint = self:read_setting("endpoint", "https://sync.ankiweb.net/"),
+        hkey = self:read_setting("hkey", ""),
+        client_version = Version.VERSION,
+        transport = Transport,
+    }
+end
+
+--[[ A blocking network call on a single-core e-ink device needs a visible
+"please wait" and must not be clamped by the power manager; both are handled
+here, and the closer is idempotent because error paths call it twice. ]]
+function KindleAnki:busy(message)
+    local InfoMessage = require("ui/widget/infomessage")
+    local banner = InfoMessage:new{ text = message }
+    UIManager:show(banner)
+    UIManager:forceRePaint()
+    pcall(UIManager.preventStandby, UIManager)
+    local released = false
+    return function()
+        if released then
+            return
+        end
+        released = true
+        pcall(UIManager.close, UIManager, banner)
+        pcall(UIManager.allowStandby, UIManager)
+    end
+end
+
+function KindleAnki:prompt_login(then_sync)
+    local ok, Login = pcall(require, "ui.login")
+    if not ok then
+        show_message("登录界面不可用：" .. tostring(Login))
+        return
+    end
+    Login:new{
+        on_submit = function(email, password)
+            local done = self:busy(_("正在登录 AnkiWeb…"))
+            local client = self:build_client()
+            local hkey, err = client:host_key(email, password)
+            done()
+            if not hkey then
+                show_message(_("登录失败：") .. tostring(err))
+                return
+            end
+            self:save_setting("hkey", hkey)
+            show_message(_("登录成功。"))
+            if then_sync then
+                self:run_sync()
+            end
+        end,
+    }:show()
+end
+
+--- Ask which side wins when the schema differs.
+function KindleAnki:prompt_full_sync(reason)
+    local ButtonDialog = require("ui/widget/buttondialog")
+    local dialog
+    dialog = ButtonDialog:new{
+        title = string.format("%s\n\n%s", _("需要整库同步"), tostring(reason or "")),
+        buttons = {
+            {
+                {
+                    text = _("下载云端覆盖本地"),
+                    callback = function()
+                        UIManager:close(dialog)
+                        self:full_sync("download")
+                    end,
+                },
+            },
+            {
+                {
+                    text = _("上传本地覆盖云端"),
+                    callback = function()
+                        UIManager:close(dialog)
+                        self:full_sync("upload")
+                    end,
+                },
+            },
+            {
+                {
+                    text = _("取消"),
+                    callback = function()
+                        UIManager:close(dialog)
+                    end,
+                },
+            },
+        },
+    }
+    UIManager:show(dialog)
+end
+
+function KindleAnki:run_sync()
+    local collection = self:open_collection()
+    if not collection then
+        -- No local database yet: the first sync is a full download.
+        return self:full_sync("download")
+    end
+
+    local ok, result = xpcall(function()
+        local Runner = require("sync.runner")
+        local runner = Runner.new{
+            collection = collection,
+            client = self:build_client(),
+            paths = self.paths,
+            progress = function() end,
+        }
+        local done = self:busy(_("正在同步…"))
+        local outcome = runner:sync()
+        done()
+        return outcome
+    end, debug.traceback)
+
+    if not ok then
+        Log.err("sync failed:", result)
+        show_message(_("同步失败：") .. tostring(result))
+        return
+    end
+
+    if result.status == "normal" then
+        show_message(_("同步完成。"))
+    elseif result.status == "noChanges" then
+        show_message(_("已是最新，无需同步。"))
+    elseif result.status == "fullRequired" then
+        self:prompt_full_sync(result.message)
+    else
+        show_message(_("同步失败：") .. tostring(result.message))
+    end
+end
+
+function KindleAnki:full_sync(direction)
+    local ok, err = xpcall(function()
+        local Runner = require("sync.runner")
+        local Model = require("model.collection")
+        local collection = self.collection
+        if not collection then
+            collection = Model.open(self.paths.collection)
+            self.collection = collection
+        end
+        local runner = Runner.new{
+            collection = collection,
+            client = self:build_client(),
+            paths = self.paths,
+        }
+        if direction == "download" then
+            local done = self:busy(_("正在下载整库…"))
+            local downloaded, download_error = runner:full_download()
+            done()
+            if not downloaded then
+                error(download_error, 0)
+            end
+        else
+            local done = self:busy(_("正在上传整库…"))
+            local uploaded, upload_error = runner:full_upload()
+            done()
+            if not uploaded then
+                error(upload_error, 0)
+            end
+        end
+        return direction
+    end, debug.traceback)
+
+    if not ok then
+        Log.err("full sync failed:", err)
+        show_message(_("整库同步失败：") .. tostring(err))
+        return
+    end
+    show_message(_("整库同步完成。"))
+end
+
 function KindleAnki:onKindleAnkiSync()
-    show_message(_("同步将在 M3 接入（登录 → 拉取 → 推送）。"))
+    if (self:read_setting("hkey", "") or "") == "" then
+        self:prompt_login(true)
+        return true
+    end
+    self:run_sync()
     return true
 end
 
