@@ -197,5 +197,25 @@ long_study:onPageBackward()
 logger.info("kindleanki-shot page-backward page=" .. tostring(long_study.body_page))
 assert(long_study.body_page == 1, "backward paging did not return to page 1")
 
+-- 4. login screen: reached from the sync action when no host key exists.  A
+-- missing widget require used to make it unavailable on the device, so both
+-- "does it render" and "does it hand the credentials over" are checked here.
+local Login = require("ui.login")
+local submitted = nil
+local login = Login:new{
+    on_submit = function(email, password)
+        submitted = { email = email, password = password }
+    end,
+}
+login:show()
+shot("06-login")
+login.email_input:setText("tester@example.com")
+login.password_input:setText("secret123")
+login:submit()
+assert(submitted and submitted.email == "tester@example.com",
+    "login did not pass the email through")
+assert(submitted.password == "secret123", "login did not pass the password through")
+logger.info("kindleanki-shot login submit ok (credentials not logged)")
+
 logger.info("kindleanki-shot done")
 os.exit(0)

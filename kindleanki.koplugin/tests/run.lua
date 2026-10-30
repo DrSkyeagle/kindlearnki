@@ -16,6 +16,19 @@ local tests_dir = source:match("^(.*)[/\\][^/\\]*$") or "."
 local plugin_root = tests_dir .. "/.."
 local repo_root = plugin_root .. "/.."
 
+-- Scratch space for tests that need real files (zstd codec round-trips).  It
+-- lives in the workspace because the system temp directory is not writable by
+-- every runner sandbox; creating it here keeps individual tests independent of
+-- the shell.
+local function ensure_dir(path)
+    if package.config:sub(1, 1) == "\\" then
+        os.execute('mkdir "' .. (path:gsub("/", "\\")) .. '" >nul 2>nul')
+    else
+        os.execute('mkdir -p "' .. path .. '" 2>/dev/null')
+    end
+end
+ensure_dir(repo_root .. "/out/tmp")
+
 package.path = table.concat({
     plugin_root .. "/?.lua",
     tests_dir .. "/?.lua",

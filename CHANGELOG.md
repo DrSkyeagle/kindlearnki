@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.2] — 2026-10-30
+
+### Fixed
+
+- **真机「登录界面不可用」**：`ui/login.lua` 引用了 `ui/widget/centercontainer`，
+  该模块在 KOReader v2026.07 已移到 `ui/widget/container/centercontainer`；
+  require 失败被 `prompt_login` 的兜底文案吞成一句提示。改到新路径。
+- **登录对话框透明**：FrameContainer 默认无底色，叠在复习页上时卡片文字透上来；
+  给对话框与两个输入框补白底（输入框加 1px 边框）。
+- 新增 `harness/require_check.lua`：在真实 KOReader 树里逐个 require 32 个模块
+  （含只在有 Screen/CanvasContext 时才能加载的 UI 模块），本次即由它定位到上述路径。
+- 新增 `tests/test_module_paths.lua` 锁住这两点（旧路径不得回归、对话框必须有底）。
+
 ## [0.2.1] — 2026-10-28
 
 ### Changed

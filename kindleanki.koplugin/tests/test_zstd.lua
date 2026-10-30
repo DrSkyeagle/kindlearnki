@@ -9,10 +9,15 @@ local Helpers = require("helpers")
 
 local temp_counter = 0
 
+-- Scratch files live inside the workspace.  The system temp directory is not
+-- writable in every runner (the sandbox used for `ops_bash` denies it), and a
+-- "Permission denied" there used to fail these cases for reasons unrelated to
+-- the codec.  `run.lua` creates the directory before any test runs.
+local TEMP_DIR = Helpers.root .. "/../out/tmp"
+
 local function temp_path(suffix)
     temp_counter = temp_counter + 1
-    local directory = os.getenv("TEMP") or os.getenv("TMP") or "."
-    return string.format("%s/kindleanki_zstd_%d_%d%s", directory, os.time(),
+    return string.format("%s/kindleanki_zstd_%d_%d%s", TEMP_DIR, os.time(),
         temp_counter, suffix or ".bin")
 end
 
