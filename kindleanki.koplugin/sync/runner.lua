@@ -195,6 +195,16 @@ function Runner:sync()
         return { status = "error", message = translate_error(err) }
     end
 
+    -- rslib compares `modified` before `schema`: identical mtime means there is
+    -- nothing to do even if the schema stamp disagrees (that combination only
+    -- happens when a previous upload stamped scm but not mod).
+    if meta.mod == self.collection.modified and meta.mod ~= 0 then
+        note("no changes local_mod=%s server_mod=%s usn=%s/%s",
+            tostring(self.collection.modified), tostring(meta.mod),
+            tostring(self.collection.usn), tostring(meta.usn))
+        return { status = "noChanges", message = "已是最新" }
+    end
+
     local needs_full, reason = Store.requires_full_sync(self.collection, meta)
     if needs_full then
         note("schema mismatch local=%s server=%s", tostring(self.collection.schema_modified),
@@ -206,15 +216,8 @@ function Runner:sync()
         return self:sync()
     end
 
-    if meta.mod == self.collection.modified and meta.mod ~= 0 then
-        note("no changes local_mod=%s server_mod=%s usn=%s/%s",
-            tostring(self.collection.modified), tostring(meta.mod),
-            tostring(self.collection.usn), tostring(meta.usn))
-        return { status = "noChanges", message = "已是最新" }
-    end
     note("sync local_mod=%s server_mod=%s usn=%s/%s", tostring(self.collection.modified),
         tostring(meta.mod), tostring(self.collection.usn), tostring(meta.usn))
-
     self:log("start")
     -- `lnewer` tells the server whether our copy is the newer one; it only
     -- decides who sends the legacy `config` blob, but sending it wrong is a

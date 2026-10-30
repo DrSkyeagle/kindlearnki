@@ -80,9 +80,38 @@ content-type: application/octet-stream
 
 **出处**：`rslib/src/sync/collection/{normal,finish,sanity}.rs`；`[实测]` 协议笔记 §4。
 
+### 3.1 实测补充（0.2.19）
+
+- `Store.pending()` 必须返回**具名**行表：`protocol.card_row()` 按 `row.id`/`row.nid`
+  取值，把 `select` 的位置数组直接喂进去会编码出 id=0 的零行，而服务器照样回 200
+  `[实测：0.2.18 及以前]`。
+- 推送请求失败时必须把行改回 `usn = -1`（`Store.restore_pending`），否则这些复习
+  永远到不了服务器。
+- `cards.data` / `notes.data` 在 schema 里没有声明类型，但 rslib 按 `Vec<u8>` 读；
+  写入必须走 `sqlite3_bind_blob`。
+- 每次同步前从数据库重新读 `col.mod/usn`（`Store.refresh_timestamps`），内存里的
+  值在复习之后就是旧的。
+
 ## 4. 整库同步（待写）
 
 `before_upload`（清 graves、`usn` 归零、`scm=now`）、流式压缩/解压、原子换入与 `.bak` 回滚、`ver != 18` 的拒绝。
+
+**出处**：`rslib/src/sync/collection/{upload,download,mod}.rs`。
+
+### 4.1 实测补充（0.2.19）
+
+- `before_upload` 要补 `ls = scm`、`col.usn = usn + 1`，并刷新内存里的
+  `scm/mod/usn/ls`；上传成功后必须 `Collection:reload()`，否则下一次同步会拿旧
+  `scm` 跟自己的上传比，又要求整库同步。
+- 换入新文件前先关闭连接，换入后删除旧的 `-wal`/`-shm`（否则旧 WAL 会套在新库上）。
+- 结构不一致（`meta.scm`）或 `applyChanges` 带回牌组/笔记类型/标签改动时，**不**
+  让用户二选一，也不中止同步：快照 `usn = -1` 的行 → 整库下载 → 把快照行
+  `apply_chunk` 回去 → `col.mod` 推进 → 重新走一次普通增量，把它们推上去。
+  依据：rslib 的 `process_unchunked_changes` 本来就是在普通同步里应用这些改动；
+  我们不解析 schema 11 的牌组/笔记类型结构，所以用"接管云端库 + 回放本地复习"
+  达到同样效果，且不会丢复习 `[源码] normal.rs:121-143, changes.rs:225-243`。
+- 一次同步里出现第二次结构变化就放弃并报错，避免死循环。
+
 
 ## 5. 媒体（`msync/*`）（待写）
 
