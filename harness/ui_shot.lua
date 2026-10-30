@@ -124,6 +124,36 @@ study_view:update_face({ html = wrap(faces.answer_html), css = css }, true,
     session:progress(), item.intervals, item.context.deck_name)
 shot("03-card-answer")
 
+-- 2b. Deck pagination: more rows than the panel can hold must turn pages with
+-- PagePress instead of dropping the overflow into an unreadable note.
+local DeckView = require("ui.deckview")
+local many = {}
+for index = 1, 25 do
+    many[index] = {
+        id = index,
+        name = string.format("牌组 %02d", index),
+        depth = index % 2,
+        counts = { new = 1, learning = 0, review = 0 },
+    }
+end
+local decks_page = DeckView:new{
+    decks = many,
+    total = 25,
+    date_text = "10月30日 周五",
+    on_open = function() end,
+    on_menu = function() end,
+    on_sync = function() end,
+}
+decks_page:show()
+logger.info(string.format("kindleanki-shot deck pages=%d rows_per_page=%d",
+    decks_page.layout.page_count, decks_page.layout.rows_per_page))
+assert(decks_page.layout.page_count >= 2, "deck list did not paginate")
+shot("08-decks-page1")
+decks_page:onPageForward()
+assert(decks_page.layout.page == 2, "page forward did not advance")
+shot("09-decks-page2")
+decks_page:close()
+
 -- 3. a long card: the PagePress rocker must page the body (the reason the
 -- keys are not bound to "show answer" on these decks).
 local all_cards = {}

@@ -265,5 +265,38 @@ function Tokens.face(size, options)
     return face or nil
 end
 
+--- Adaptive body font size for card text, in device pixels.
+--
+-- Anki templates almost always pin `.card { font-size: 20px; }`, which is tiny
+-- on a 1072x1448 panel.  The size is derived from the screen instead of a fixed
+-- number: roughly 26 CJK glyphs per line and 34 lines per page, clamped so it
+-- stays readable on small emulator windows and does not explode on large ones.
+function Tokens.body_font_px(width, height)
+    width = tonumber(width) or 1072
+    height = tonumber(height) or 1448
+    local by_width = math.floor(width / 26)
+    local by_height = math.floor(height / 34)
+    local px = math.min(by_width, by_height)
+    if px < 24 then
+        px = 24
+    elseif px > 64 then
+        px = 64
+    end
+    return px
+end
+
+--- Remove pinned `font-size` declarations so the adaptive size wins.
+--
+-- The cascade would otherwise let the template's px value override the base
+-- font passed to the HTML box.  `em`/`%` sizes that remain inherit from the new
+-- base, which keeps relative emphasis intact.
+function Tokens.strip_font_size(css)
+    css = tostring(css or "")
+    -- Only absolute units: `em`/`%` should keep inheriting from the new base.
+    css = css:gsub("font%-size%s*:%s*[%d%.]+%s*px%s*;?", "")
+    css = css:gsub("font%-size%s*:%s*[%d%.]+%s*pt%s*;?", "")
+    return css
+end
+
 return Tokens
 

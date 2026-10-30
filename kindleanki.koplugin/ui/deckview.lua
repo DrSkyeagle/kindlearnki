@@ -48,6 +48,7 @@ local DeckView = InputContainer:extend{
     decks = nil,
     total = 0,
     date_text = "",
+    page = 1,
 
     -- Callbacks.  `on_open(nil)` means "全部牌组".
     on_open = nil,
@@ -90,9 +91,15 @@ function DeckView:init()
     if Device:hasKeys() and Device.input then
         -- Voyage has no Back key; Kindles with a keyboard and the emulator do.
         -- A binding that never matches costs nothing.
+        local group = Device.input.group or {}
         self.key_events = {
-            Close = { { Device.input.group.Back }, event = "Close" },
+            Close = { { group.Back }, event = "Close" },
         }
+        -- PagePress turns the deck list, like every other paged screen.
+        if group.PgFwd and group.PgBack then
+            self.key_events.PageForward = { { group.PgFwd }, event = "PageForward" }
+            self.key_events.PageBackward = { { group.PgBack }, event = "PageBackward" }
+        end
     end
 
     self:_layout()
@@ -285,7 +292,10 @@ function DeckView:_layout()
         + math.floor((footer_h - footer_metrics.h) / 2)
         + footer_metrics.baseline
     layout.footer_text = Tokens.all_decks_text(self.total)
-    add_zone(footer_rect, function() fire(self.on_open, nil) end)
+    local footer_text_w = Widgets.text_width(faces.footer, layout.footer_text)
+    add_zone(Widgets.box(content_x, footer_top,
+            math.min(content_w, footer_text_w + 2 * gap), footer_h),
+        function() fire(self.on_open, nil) end)
 
     --== 牌组行 =======================================================
     local rows_top = rule_y + Tokens.size.hairline + gap
@@ -296,7 +306,9 @@ function DeckView:_layout()
 
     local deck_count = #self.decks
     layout.empty_text = nil
-    layout.hidden_text = nil
+    layout.page_count = 1
+    layout.page = 1
+    layout.rows_per_page = deck_count
     if deck_count == 0 then
         layout.empty_text = Tokens.empty_text
         layout.empty_baseline = rows_top
@@ -305,29 +317,29 @@ function DeckView:_layout()
     elseif rows_available > 0 then
         local row_min = px(Tokens.size.row_min)
         local row_max = px(Tokens.size.row_max)
-        local visible = deck_count
-        -- Equal share of the leftover height, clamped to a comfortable range.
+        local per_page = deck_count
         local row_h = math.min(row_max, math.floor(rows_available / deck_count))
         if row_h < row_min then
-            -- Too many decks for the page at a comfortable height: fit as many
-            -- as we can and say so, instead of scrolling (scrolling is banned by
-            -- the design and there is no scrollbar to draw on this layout).
+            -- Too many decks for one page at a comfortable row height: keep the
+            -- height and page instead (a 1072x1448 panel fits ~11 rows).
             row_h = row_min
-            visible = math.floor(rows_available / row_h)
-            if visible > 0 and visible < deck_count then
-                visible = visible - 1 -- keep a line for the "另有 N 个牌组" note
-            end
-            if visible <= 0 then
-                visible = 0
-                row_h = 0
-            end
+            per_page = math.max(1, math.floor(rows_available / row_h))
         end
         layout.row_h = row_h
+        layout.rows_per_page = per_page
 
+        local page_count = math.ceil(deck_count / per_page)
+        layout.page_count = page_count
+        self.page = math.max(1, math.min(tonumber(self.page) or 1, page_count))
+        layout.page = self.page
+
+        local first = (self.page - 1) * per_page + 1
+        local last = math.min(first + per_page - 1, deck_count)
         local deck_metrics = Widgets.metrics(faces.deck)
-        for index = 1, visible do
+        for index = first, last do
             local deck = self.decks[index]
-            local row_top = rows_top + (index - 1) * row_h
+            local slot = index - first
+            local row_top = rows_top + slot * row_h
             local row = {
                 deck_id = deck.id,
                 depth = tonumber(deck.depth) or 0,
@@ -349,17 +361,40 @@ function DeckView:_layout()
                 function() fire(self.on_open, deck.id) end)
         end
 
-        if visible < deck_count then
-            local hidden = deck_count - visible
-            -- When no row fits at all, the note replaces the list entirely.
-            local note_top = rows_top + (visible > 0 and visible * row_h or 0)
-            layout.hidden_text = Tokens.hidden_decks_text(hidden)
-            layout.hidden_baseline = note_top + Widgets.metrics(faces.note).baseline
+        if page_count > 1 then
+            local page_text = string.format("%d/%d", self.page, page_count)
+            local page_w = Widgets.text_width(faces.deck_count, page_text)
+            local page_pad = px(6)
+            layout.page_text = page_text
+            layout.page_x = content_right - page_w
+            add_zone(Widgets.box(content_right - page_w - page_pad,
+                    footer_top, page_w + 2 * page_pad, footer_h),
+                function() self:onPageForward() end)
         end
     end
 
     self.layout = layout
     return layout
+end
+
+--- Turn the deck pages; PagePress and the on-screen counter both land here.
+function DeckView:_turn_page(delta)
+    local layout = self.layout
+    if not layout or (layout.page_count or 1) <= 1 then
+        return true
+    end
+    self.page = ((self.page - 1 + delta) % layout.page_count) + 1
+    self:_layout()
+    UIManager:setDirty(self, "ui")
+    return true
+end
+
+function DeckView:onPageForward()
+    return self:_turn_page(1)
+end
+
+function DeckView:onPageBackward()
+    return self:_turn_page(-1)
 end
 
 --==========================================================================
@@ -440,6 +475,11 @@ function DeckView:paintTo(bb, x, y)
     Widgets.draw(bb, x + layout.content_x, y + layout.footer_baseline,
         faces.footer, layout.footer_text, colors.ink,
         layout.content_w)
+
+    if layout.page_text then
+        Widgets.draw(bb, x + layout.page_x, y + layout.footer_baseline,
+            faces.deck_count, layout.page_text, colors.ink)
+    end
 
     -- 底部一行：菜单
     Widgets.draw(bb, x + layout.content_x, y + layout.menu_baseline,

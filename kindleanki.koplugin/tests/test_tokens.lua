@@ -196,6 +196,22 @@ return {
         assert(#leaked_globals == 0,
             "ui/tokens.lua leaked global(s): " .. table.concat(leaked_globals, ", "))
     end,
+
+    ["body font scales with the screen"] = function()
+        local voyage = Tokens.body_font_px(1072, 1448)
+        local emulator = Tokens.body_font_px(708, 956)
+        assert(voyage >= 40, "Voyage body font too small: " .. voyage)
+        assert(emulator < voyage, "smaller screens must get smaller text")
+        assert(Tokens.body_font_px(200, 200) == 24, "lower clamp")
+        assert(Tokens.body_font_px(5000, 5000) == 64, "upper clamp")
+    end,
+
+    ["strip_font_size drops pinned px but keeps relative sizes"] = function()
+        local css = ".card{font-size:20px;color:#000}"
+            .. string.char(10) .. ".q{font-size:1.2em}"
+        local out = Tokens.strip_font_size(css)
+        assert(not out:find("20px", 1, true), out)
+        assert(out:find("1.2em", 1, true), out)
+        assert(out:find("color:#000", 1, true), out)
+    end,
 }
-
-

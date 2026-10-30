@@ -7,6 +7,10 @@ local Queue = require("sched.queue")
 
 local DeckList = {}
 
+--- Only the first two levels are shown on the deck screen: the third level and
+--- deeper are reached through their parent, which already carries their counts.
+DeckList.MAX_DEPTH = 2
+
 local function depth_of(name)
     local depth = 0
     for _ in name:gmatch("::") do
@@ -45,16 +49,22 @@ function DeckList.build(collection, opts)
         return a.name < b.name
     end)
 
+    local max_depth = tonumber(opts.max_depth) or DeckList.MAX_DEPTH
     for _, deck in ipairs(sorted) do
-        local counts = Queue.counts(collection, deck.id, now, today)
-        decks[#decks + 1] = {
-            id = deck.id,
-            name = deck.name,
-            display_name = display_name(deck.name),
-            depth = depth_of(deck.name),
-            counts = counts,
-            total = counts.new + counts.learning + counts.review,
-        }
+        local depth = depth_of(deck.name)
+        if depth < max_depth then
+            -- Sub-subdecks stay hidden; the parent row already counts them,
+            -- because Queue.counts sums the whole subtree.
+            local counts = Queue.counts(collection, deck.id, now, today)
+            decks[#decks + 1] = {
+                id = deck.id,
+                name = deck.name,
+                display_name = display_name(deck.name),
+                depth = depth,
+                counts = counts,
+                total = counts.new + counts.learning + counts.review,
+            }
+        end
     end
 
     -- "All decks" is not a real Anki deck: deck 1 is the default deck and other

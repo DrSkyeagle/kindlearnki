@@ -262,8 +262,12 @@ function StudyView:_load_html_body(html, css, resource_dir, key)
         -- so the buffer must be released explicitly before a new card is laid
         -- out, otherwise every face leaks a MuPDF document.
         body:free()
-        body:setContent(html, css, Screen:scaleBySize(Tokens.font.body),
-            nil, nil, resource_dir)
+        -- Size the card from the screen, and drop the template's pinned
+        -- `font-size` so that size actually applies.
+        local body_px = Tokens.body_font_px(Screen:getWidth(), Screen:getHeight())
+        local card_css = Tokens.strip_font_size(css)
+            .. string.format("\n.card{font-size:%dpx;}", body_px)
+        body:setContent(html, card_css, body_px, nil, nil, resource_dir)
     end)
     if not ok then
         logger.warn("kindleanki: cannot render card HTML, using plain text:", err)
