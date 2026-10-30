@@ -26,6 +26,16 @@ return {
         assert(source:find("Controller.close(view)", 1, true),
             "the study screen is not closed when the queue is empty")
     end,
+    ["a full download keeps the collection object alive"] = function()
+        local source = Helpers.read("main.lua")
+        -- Throwing the object away left the deck list and the study session
+        -- holding a closed handle: the next tap died on `self.conn` being nil.
+        assert(not source:find("pcall(collection.close, collection)", 1, true),
+            "full_sync closes the collection that the UI still uses")
+        assert(source:find("if not self.collection then", 1, true),
+            "full_sync replaces the collection even when the runner reloaded it")
+    end,
+
     ["the deck list is refreshed when a session ends"] = function()
         local source = Helpers.read("study/controller.lua")
         assert(source:find("refresh_decks", 1, true),
