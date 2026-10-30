@@ -55,4 +55,20 @@ if not ok then
 end
 
 print("SMOKE-OK network_selftest returned " .. tostring(result))
-os.exit(0)
+
+-- The device failure was `ljsqlite3[cantopen]`: the plugin data directory did
+-- not exist on a fresh install.  Reproduce that situation here (a brand new
+-- directory tree) and prove the plugin can write its files inside it.  Opening
+-- an *empty* SQLite file is intentionally not done here: that is what bug #2
+-- was, and `tests/test_runner.lua` covers the download-then-open sequence.
+local Paths = require("core.paths")
+local base = "/tmp/kindleanki-smoke-" .. tostring(os.time())
+local paths = Paths.new(base, base .. "/settings")
+local ok_dirs, dir_err = Paths.ensure(paths)
+assert(ok_dirs, "Paths.ensure failed: " .. tostring(dir_err))
+local probe = assert(io.open(paths.root .. "/probe.txt", "wb"),
+    "cannot write into the freshly created data directory")
+probe:write("x")
+probe:close()
+os.remove(paths.root .. "/probe.txt")
+print("SMOKE fresh-directory data dir ok")

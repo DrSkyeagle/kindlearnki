@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.2.8] — 2026-10-30
+
+首次整库同步在设备上走不通，USB 日志（`/f/koreader/crash.log`）给出三处连锁问题：
+
+### Fixed
+
+1. **数据目录不存在**：`ljsqlite3[cantopen] unable to open database file`。插件从未创建
+   `<koreader>/kindleanki/`，SQLite 不会替你创建父目录。新增 `Paths.mkdir_p` /
+   `Paths.ensure`（优先用 KOReader 自带 lfs，桌面回退到 shell），在 `init()`、
+   `open_collection()`、`full_sync()` 之前调用。
+2. **下载前预先打开了空库**：整库下载分支先 `Model.open()` 建了个空 SQLite 文件，
+   而空库没有 `col` 行，`load_meta()` 直接报 `collection has no col row`。现在下载
+   不再预开本地库：`Runner.new` 允许 `collection = nil`，下载完成后再打开；若目标
+   文件存在则先关闭旧连接再替换，避免 Kindle 上重命名失败。
+3. **校验下载库时缺少排序规则**：`pragma quick_check` 会检查带 `COLLATE unicase`
+   的索引，未注册该 collation 时报 `no such collation sequence: unicase`，导致好库
+   被判定“校验失败”。`verify_collection` 现在先 `Collation.install(conn)`。
+
+### Added
+
+- `tests/test_paths.lua`：目录创建、幂等、嵌套父目录。
+- `tests/test_runner.lua`：**本地库不存在时的整库下载**（正是设备失败路径），
+  包括下载后能正常打开并数到卡片。
+- `harness/smoke_main.lua`：新增“全新目录下建库”一步。
+
 ## [0.2.7] — 2026-10-30
 
 ### Fixed

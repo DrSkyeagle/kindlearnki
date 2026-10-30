@@ -104,6 +104,14 @@ function KindleAnki:init()
 
     local ok, err = pcall(function()
         self.paths = Paths.for_koreader()
+        -- First run on a device: SQLite cannot create the collection inside a
+        -- missing directory, and the failure surfaces as a bare `cantopen`.
+        local ok_dirs, dir_error = Paths.ensure(self.paths)
+        if not ok_dirs then
+            Log.err("cannot create data directory:", dir_error)
+        else
+            Log.info("data directory ready:", self.paths.root)
+        end
         self.caps = Capabilities.probe{
             ca_path = self.paths.ca_bundle,
         }
@@ -253,6 +261,10 @@ function KindleAnki:open_collection()
     end
     if not self.paths then
         return nil, "插件未初始化（路径不可用）"
+    end
+    local ok_dirs, dir_error = Paths.ensure(self.paths)
+    if not ok_dirs then
+        return nil, "无法创建数据目录：" .. tostring(dir_error)
     end
     if not file_exists(self.paths.collection) then
         return nil, "还没有本地库：请先登录并同步一次"
@@ -502,6 +514,7 @@ function KindleAnki:prompt_full_sync(reason)
 end
 
 function KindleAnki:run_sync()
+    Trace.mark("sync.open-collection")
     local collection = self:open_collection()
     if not collection then
         -- No local database yet: the first sync is a full download.
@@ -543,10 +556,22 @@ function KindleAnki:full_sync(direction)
     local ok, err = xpcall(function()
         local Runner = require("sync.runner")
         local Model = require("model.collection")
+        assert(Paths.ensure(self.paths))
+        -- Downloading does not need a local database: the runner writes the new
+        -- file next to the target and renames it into place.  Opening an empty
+        -- placeholder first fails ("collection has no col row") and, worse,
+        -- leaves a schema-less file behind if the download is interrupted.
         local collection = self.collection
-        if not collection then
+        if direction ~= "download" and not collection then
             collection = Model.open(self.paths.collection)
             self.collection = collection
+        end
+        if direction == "download" and collection then
+            -- The old file is about to be replaced; close it so the rename on
+            -- Kindle does not hit an open handle.
+            pcall(collection.close, collection)
+            self.collection = nil
+            collection = nil
         end
         local runner = Runner.new{
             collection = collection,
@@ -554,12 +579,15 @@ function KindleAnki:full_sync(direction)
             paths = self.paths,
         }
         if direction == "download" then
+            Trace.mark("sync.full-download.start")
             local done = self:busy(_("正在下载整库…"))
             local downloaded, download_error = runner:full_download()
             done()
+            Trace.mark("sync.full-download.done")
             if not downloaded then
                 error(download_error, 0)
             end
+            self.collection = Model.open(self.paths.collection)
         else
             local done = self:busy(_("正在上传整库…"))
             local uploaded, upload_error = runner:full_upload()

@@ -10,6 +10,7 @@ local Helpers = require("helpers")
 local Collection = require("model.collection")
 local Runner = require("sync.runner")
 local Store = require("sync.store")
+local Paths = require("core.paths")
 local protocol = require("sync.protocol")
 
 local FIXTURE = os.getenv("KINDLEANKI_TEST_COLLECTION")
@@ -269,6 +270,36 @@ return {
         cleanup(path)
         assert(ok, err)
     end,
+
+    ["full download works before a local collection exists"] = function()
+        -- The device hit both halves of this: the data directory did not exist
+        -- (`cantopen`) and the download branch used to open an empty placeholder
+        -- (`collection has no col row`).  A first sync must do neither.
+        local input = assert(io.open(FIXTURE, "rb"))
+        local bytes = input:read("*a")
+        input:close()
+
+        local base = Helpers.root .. "/../out/download-" .. tostring(os.time())
+            .. "-" .. tostring(math.random(100000))
+        local paths = Paths.new(base, base .. "/settings")
+        assert(Paths.ensure(paths))
+
+        local runner = Runner.new{
+            collection = nil,
+            client = { download = function() return bytes end },
+            paths = paths,
+        }
+        local ok, err = runner:full_download()
+        assert(ok, "full_download failed: " .. tostring(err))
+
+        local collection = Collection.open(paths.collection)
+        assert(collection, "downloaded collection cannot be opened")
+        local count = collection.conn:first("select count(*) from cards")
+        assert(count and tonumber(count[1]) > 0, "downloaded collection is empty")
+        collection:close()
+
+        os.remove(paths.collection)
+        os.remove(base .. "/collection.incoming")
+        os.remove(paths.collection .. ".bak")
+    end,
 }
-
-

@@ -31,9 +31,15 @@ local function translate_error(err)
 end
 
 --- @tparam table opts { collection, client, paths, progress }
+-- `collection` is optional for the very first full download: there is nothing
+-- to open yet, and `paths` is enough to place the downloaded file.
 function Runner.new(opts)
-    assert(opts and opts.collection, "collection is required")
+    assert(opts, "opts are required")
+    assert(opts.collection or opts.paths, "collection or paths are required")
     assert(opts.client, "client is required")
+    if opts.collection then
+        assert(opts.paths or opts.collection.path, "paths are required")
+    end
     return setmetatable({
         collection = opts.collection,
         client = opts.client,
@@ -189,7 +195,9 @@ function Runner:full_download()
     assert(paths, "paths are required for a full download")
 
     local raw = paths.root .. "/collection.incoming"
-    local target = self.collection.path
+    -- A first sync has no local collection to open (an empty SQLite file has no
+    -- `col` row, so opening one first would fail before the download starts).
+    local target = self.collection and self.collection.path or paths.collection
     local backup = target .. ".bak"
 
     self:log("download")
@@ -201,7 +209,10 @@ function Runner:full_download()
         return nil, translate_error(err)
     end
 
-    local file = assert(io.open(raw, "wb"))
+    local file, open_error = io.open(raw, "wb")
+    if not file then
+        return nil, "无法写入临时文件：" .. tostring(open_error)
+    end
     file:write(body)
     file:close()
 
@@ -227,7 +238,9 @@ function Runner:full_download()
         os.remove(raw)
         return nil, "无法写入新库"
     end
-    self.collection:reload()
+    if self.collection then
+        self.collection:reload()
+    end
     return true
 end
 
@@ -237,6 +250,12 @@ function Runner:verify_collection(path)
         return nil, "db layer unavailable"
     end
     local conn = Conn.open(path, true)
+    -- The collection's indexes use `COLLATE unicase`; without registering it,
+    -- even `pragma quick_check` fails with "no such collation sequence" and a
+    -- perfectly good download would be rejected.
+    pcall(function()
+        require("db.collation").install(conn)
+    end)
     local verified, err = pcall(function()
         local row = conn:first("pragma quick_check")
         assert(row and row[1] == "ok", "quick_check failed")
