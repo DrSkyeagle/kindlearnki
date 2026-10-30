@@ -372,12 +372,20 @@ function KindleAnki:prompt_login(then_sync)
             settled so the last line in crash.log still tells us which stage
             ran. ]]
             UIManager:scheduleIn(0.3, function()
+                -- Free everything the closed dialogs/keyboard left behind
+                -- before a TLS handshake on a 512 MB device.
+                collectgarbage("collect")
+                collectgarbage("collect")
+                Log.info(string.format("login: memory before request %.1f MB",
+                    collectgarbage("count") / 1024))
                 local finished, failure = xpcall(function()
                     Log.info("login: host_key begin")
                     local done = self:busy(_("正在登录 AnkiWeb…"))
                     local client = self:build_client()
                     local hkey, login_error = client:host_key(email, password)
                     done()
+                    Log.info(string.format("login: memory after request %.1f MB",
+                        collectgarbage("count") / 1024))
                     Log.info("login: host_key returned",
                         hkey and "ok" or ("error=" .. tostring(login_error)))
                     if not hkey then
@@ -414,6 +422,8 @@ function KindleAnki:network_selftest()
         return true
     end
 
+    collectgarbage("collect")
+    Log.info(string.format("selftest: memory %.1f MB", collectgarbage("count") / 1024))
     local done = self:busy(_("正在测试网络…"))
     local steps = Transport.selftest("sync.ankiweb.net")
     done()

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.6] — 2026-10-30
+
+### Changed
+
+- 登录与网络自检在发起 TLS 前执行两次 `collectgarbage("collect")`，并把
+  `login: memory before request` / `after request` 写进 crash.log —— Kindle 512 MB
+  下，键盘 + 卡片文档 + 握手同时存在的内存峰值是可测的了。
+- `harness/network_check.lua`：在真实 KOReader 运行时里跑同一套 `socket/ssl`
+  与 CA，再发一次真实 POST。本机结果：握手成功，AnkiWeb 返回 400（请求到达服务器）。
+
 ## [0.2.5] — 2026-10-30
 
 ### Fixed
