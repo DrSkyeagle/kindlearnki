@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.2.19] — 2026-10-31
+
+同步修复：Kindle 的复习进度传不到手机，以及手机一同步 Kindle 就被要求整库同步。
+
+### Fixed
+
+- **上传的其实是"零行"**：`Store.pending()` 返回的是 `select` 出来的位置数组，而
+  `protocol.card_row()` 按字段名（`row.id`/`row.nid`…）取值，数组上全是 nil，于是
+  每张卡都编码成 id=0、mod=0 的默认行。服务器照样回 200，UI 显示"同步完成"，
+  所以看起来永远成功、手机上永远没有。`pending()` 现在返回具名表（`row_to_card`
+  等），并加了回归测试断言推送行的 `id/nid/mod/usn` 与本地卡片一致。
+- **卡片/笔记的 `data` 存成 TEXT**：`cards.data`/`notes.data` 在 schema 里没写类型，
+  但 rslib 按 `Vec<u8>` 读；绑 Lua 字符串会存成 TEXT，Anki 读这张卡就报类型错。
+  写入时改走 `sqlite3_bind_blob`（`Conn.blob`），`repair_blob_storage()` 也会修这两列
+  和 `tags.config`。
+- **手机改结构后 Kindle 永久要求整库同步**：`applyChanges` 带回的牌组/笔记类型/标签
+  变更以前直接中止同步，而中止不会"消费"掉服务器上的这些变更，于是每次同步都再次
+  提示。现在改为**接管云端库 + 回放本地待同步复习**：先把待同步行快照下来，整库
+  下载，按 mtime 规则把这些复习合并回去，再把 `col.mod` 推进，接着走完一次普通同步
+  把它们推上去。用户的复习不丢，服务器上的结构变更被消费，下一轮就是普通增量同步。
+- **整库上传后不同步内存状态**：`before_upload` 改了 `scm/usn/mod` 却没刷新对象，
+  下一次同步拿旧 `scm` 跟自己的上传比 → 又要求整库同步（来回踢皮球）。现在上传后
+  `Collection:reload()`，并且 `before_upload` 补齐了 rslib 的 `ls = scm`。
+- **推送失败会把待同步行当成已发送**：`mark_usns` 在请求前改写 usn，网络在中途断
+  掉就会永久丢复习。失败时用 `Store.restore_pending()` 把行改回 `usn = -1`。
+- **`col.mod` 用的是打开文件时的旧值**：复习只改数据库，不同步对象；现在每次
+  `Runner:sync()` 先 `refresh_timestamps()` 再和服务器比较，"有复习却回无事可做"
+  的情况不会再出现。
+- `start` 的 `lnewer` 现在按本地/服务器 `mod` 如实上报，不再恒为 false。
+- 整库下载在 Windows 上会因存在性探测句柄没关掉而 `无法备份旧库`：探测句柄现在关闭
+  后再 rename（真机是 Linux，不受影响，但测试和桌面模拟器会）。
+
+### Tests
+
+- `tests/test_runner.lua`：新增"结构不一致时接管云端库并保留本地复习""校验失败时接管
+  而不是放弃""推送失败后行仍是待同步"，并把推送行内容（id/nid/mod/usn）和入站
+  `data` 的 BLOB 存储类断言进去。
+
 ## [0.2.18] — 2026-10-31
 
 复习页 UI 收三处，渲染管线（MuPDF / ScrollHtmlWidget / 会话 / 同步）一行没动。

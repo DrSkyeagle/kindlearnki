@@ -40,6 +40,8 @@ local function cleanup(path)
 end
 
 --- @tparam table behaviour { meta=, graves=, changes=, chunks=, sanity=, finish=, error_at= }
+-- `meta` and `sanity` may be functions, which is how a test models a server
+-- that answers differently on the retry after a download.
 local function fake_client(behaviour, calls)
     local client = {}
     local function record(name)
@@ -49,10 +51,19 @@ local function fake_client(behaviour, calls)
         end
         return true
     end
+    local function resolve(value)
+        if type(value) == "function" then
+            return value()
+        end
+        return value
+    end
 
     function client:meta()
-        record("meta")
-        return behaviour.meta
+        local ok, err = record("meta")
+        if not ok then
+            return nil, err
+        end
+        return resolve(behaviour.meta)
     end
 
     function client:start()
@@ -72,7 +83,10 @@ local function fake_client(behaviour, calls)
     end
 
     function client:apply_chunk(chunk)
-        record("applyChunk")
+        local ok, err = record("applyChunk")
+        if not ok then
+            return nil, err
+        end
         behaviour.pushed = behaviour.pushed or {}
         behaviour.pushed[#behaviour.pushed + 1] = chunk
         return true
@@ -80,7 +94,7 @@ local function fake_client(behaviour, calls)
 
     function client:sanity_check2()
         record("sanityCheck2")
-        return behaviour.sanity or "ok"
+        return resolve(behaviour.sanity) or "ok"
     end
 
     function client:finish()
@@ -125,22 +139,142 @@ return {
         assert(ok, err)
     end,
 
-    ["schema mismatch asks for a full sync"] = function()
+    ["schema mismatch adopts the server copy and keeps local reviews"] = function()
+        if not FIXTURE then
+            return
+        end
+        local path = copy_fixture()
+        local input = assert(io.open(FIXTURE, "rb"))
+        local server_bytes = input:read("*a")
+        input:close()
+
+        local collection = Collection.open(path)
+        local ok, err = pcall(function()
+            collection:load_decks()
+            local card = collection:cards_in_decks({ NEW_DECK })[1]
+            assert(card, "fixture has no cards")
+            -- One card reviewed offline: it must survive the download.
+            collection.conn:run("update cards set usn = -1 where id = ?", card.id)
+            -- Local schema is ahead of the server's copy (the reported loop).
+            local server_scm = collection.schema_modified
+            collection.conn:run("update col set scm = ?", server_scm + 5000)
+            collection.schema_modified = server_scm + 5000
+
+            local base = Helpers.root .. "/../out/adopt-" .. tostring(os.time())
+                .. "-" .. tostring(math.random(100000))
+            local paths = Paths.new(base, base .. "/settings")
+            assert(Paths.ensure(paths))
+
+            local calls = {}
+            local behaviour = {
+                -- The server copy keeps the original scm.
+                meta = function()
+                    return { mod = 999, scm = server_scm, usn = 7 }
+                end,
+                download_body = server_bytes,
+                finish_mod = 4321,
+            }
+            local runner = Runner.new{
+                collection = collection,
+                client = fake_client(behaviour, calls),
+                paths = paths,
+            }
+            local result = runner:sync()
+            assert(result.status == "normal",
+                tostring(result.status) .. " " .. tostring(result.message))
+            assert(calls[1] == "meta" and calls[2] == "download",
+                table.concat(calls, ","))
+
+            local row = collection.conn:first(
+                "select usn from cards where id = ?", card.id)
+            assert(row and tonumber(row[1]) ~= -1, "the local review stayed pending")
+            local pushed = behaviour.pushed or {}
+            local found = false
+            for _, chunk in ipairs(pushed) do
+                for _, pushed_card in ipairs(chunk.cards or {}) do
+                    if tonumber(pushed_card[1]) == tonumber(card.id) then
+                        found = true
+                    end
+                end
+            end
+            assert(found, "the replayed card was not pushed to the server")
+        end)
+        collection:close()
+        cleanup(path)
+        assert(ok, err)
+    end,
+
+    ["sanity mismatch adopts the server copy instead of giving up"] = function()
+        if not FIXTURE then
+            return
+        end
+        local path = copy_fixture()
+        local input = assert(io.open(FIXTURE, "rb"))
+        local server_bytes = input:read("*a")
+        input:close()
+        local collection = Collection.open(path)
+        local ok, err = pcall(function()
+            local base = Helpers.root .. "/../out/sanity-" .. tostring(os.time())
+                .. "-" .. tostring(math.random(100000))
+            local paths = Paths.new(base, base .. "/settings")
+            assert(Paths.ensure(paths))
+            local calls = {}
+            local sanity_calls = 0
+            local behaviour = {
+                meta = { mod = 999, scm = collection.schema_modified, usn = 1 },
+                sanity = function()
+                    sanity_calls = sanity_calls + 1
+                    return sanity_calls == 1 and "bad" or "ok"
+                end,
+                download_body = server_bytes,
+                finish_mod = 2222,
+            }
+            local runner = Runner.new{
+                collection = collection,
+                client = fake_client(behaviour, calls),
+                paths = paths,
+            }
+            local result = runner:sync()
+            assert(result.status == "normal",
+                tostring(result.status) .. " " .. tostring(result.message))
+            local saw_download = false
+            for _, name in ipairs(calls) do
+                if name == "download" then
+                    saw_download = true
+                end
+            end
+            assert(saw_download, "sanity failure did not re-download the collection")
+        end)
+        collection:close()
+        cleanup(path)
+        assert(ok, err)
+    end,
+
+    ["a failed push leaves the rows pending"] = function()
         if not FIXTURE then
             return
         end
         local path = copy_fixture()
         local collection = Collection.open(path)
         local ok, err = pcall(function()
+            collection:load_decks()
+            local card = collection:cards_in_decks({ NEW_DECK })[1]
+            collection.conn:run("update cards set usn = -1 where id = ?", card.id)
             local calls = {}
+            local behaviour = {
+                meta = { mod = 999, scm = collection.schema_modified, usn = 3 },
+                error_at = "applyChunk",
+            }
             local runner = Runner.new{
                 collection = collection,
-                client = fake_client({
-                    meta = { mod = 1, scm = (collection.schema_modified or 0) + 1 },
-                }, calls),
+                client = fake_client(behaviour, calls),
             }
             local result = runner:sync()
-            assert(result.status == "fullRequired", result.status)
+            assert(result.status == "error", result.status)
+            local row = collection.conn:first(
+                "select usn from cards where id = ?", card.id)
+            assert(row and tonumber(row[1]) == -1,
+                "a failed push marked the review as sent (usn=" .. tostring(row and row[1]) .. ")")
         end)
         collection:close()
         cleanup(path)
@@ -221,29 +355,26 @@ return {
             local still_pending = collection.conn:first("select usn from cards where id = ?", card.id)
             assert(still_pending and tonumber(still_pending[1]) ~= -1, "local card still pending")
             assert(#(behaviour.pushed or {}) >= 1, "nothing was pushed")
-        end)
-        collection:close()
-        cleanup(path)
-        assert(ok, err)
-    end,
 
-    ["sanity failure asks for a full sync"] = function()
-        if not FIXTURE then
-            return
-        end
-        local path = copy_fixture()
-        local collection = Collection.open(path)
-        local ok, err = pcall(function()
-            local calls = {}
-            local runner = Runner.new{
-                collection = collection,
-                client = fake_client({
-                    meta = { mod = 999, scm = collection.schema_modified, usn = 1 },
-                    sanity = "bad",
-                }, calls),
-            }
-            local result = runner:sync()
-            assert(result.status == "fullRequired", result.status)
+            -- The pushed row must be the real card.  The old encoder was fed
+            -- positional DB rows, read `row.id`/`row.nid` as nil, and uploaded
+            -- a zero row that the server happily accepted.
+            local pushed = behaviour.pushed[1]
+            local pushed_card = (pushed.cards or {})[1]
+            assert(pushed_card, "no card in the pushed chunk")
+            assert(tonumber(pushed_card[1]) == tonumber(card.id),
+                "pushed card id: " .. tostring(pushed_card[1]))
+            assert(tonumber(pushed_card[5]) == tonumber(card.mod),
+                "pushed card mod: " .. tostring(pushed_card[5]))
+            assert(tonumber(pushed_card[6]) ~= -1, "pushed card usn is -1")
+            assert(tonumber(pushed_card[2]) == tonumber(card.nid),
+                "pushed card nid: " .. tostring(pushed_card[2]))
+
+            -- BLOB storage class for the incoming card's protobuf `data`.
+            local column = collection.conn:first(
+                "select typeof(data) from cards where id = ?", server_card.id)
+            assert(column and column[1] == "blob",
+                "inbound card data stored as " .. tostring(column and column[1]))
         end)
         collection:close()
         cleanup(path)

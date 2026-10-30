@@ -10,9 +10,17 @@
 
 local Store = require("sync.store")
 local protocol = require("sync.protocol")
+local Log = require("core.log")
 
 local Runner = {}
 local MT = { __index = Runner }
+
+-- Sync decisions are invisible in the UI ("成功" and "其实什么都没发出去"
+-- look the same), and crash.log is the only channel on the device.  One line
+-- per decision, no card data.
+local function note(fmt, ...)
+    pcall(Log.info, string.format("sync: " .. fmt, ...))
+end
 
 local function translate_error(err)
     if err == nil then
@@ -82,28 +90,106 @@ function Runner:pull(meta)
             break
         end
     end
+    note("pull chunks=%d", pulled)
     return true
 end
 
 --- Push all locally pending rows in batches.
 function Runner:push(meta)
     local pending = Store.pending(self.collection)
+    note("push pending cards=%d notes=%d revlog=%d graves=%d",
+        #pending.cards, #pending.notes, #pending.revlog, #pending.graves)
     Store.mark_usns(self.collection, meta.usn)
     local chunks = Store.chunks(pending, meta.usn, 1000)
     for index, chunk in ipairs(chunks) do
         local ok, err = self.client:apply_chunk(chunk)
         if not ok then
+            Store.restore_pending(self.collection, pending)
             return nil, translate_error(err)
         end
+        note("push chunk=%d cards=%d notes=%d revlog=%d done=%s", index,
+            #(chunk.cards or {}), #(chunk.notes or {}), #(chunk.revlog or {}),
+            tostring(chunk.done))
         self:log("push", index)
     end
     return true
 end
 
+--- Adopt the server's collection while keeping the local reviews.
+--
+-- Anki requires a WHOLE-collection transfer when the two sides disagree on
+-- schema (scm) or when applyChanges carries structural changes (deck/notetype/
+-- tag edits).  Doing that blindly destroys whatever was reviewed offline, and
+-- a full *upload* raises scm again, which forces the other device to full-sync
+-- in turn -- the ping-pong this replaces.
+--
+-- So: snapshot the pending rows, take the server's file, replay the snapshot
+-- on top (mtime rules decide the winner, same as a normal chunk merge), mark
+-- the collection modified so a normal sync follows, and let the caller rerun
+-- the handshake against the new state.
+--
+-- @treturn boolean|nil true on success
+-- @treturn string|nil error message
+function Runner:adopt_server_collection(reason)
+    if not self.collection then
+        -- Nothing local to lose (first sync): a plain download is enough.
+        local downloaded, err = self:full_download()
+        return downloaded, err
+    end
+    if self.adopted then
+        -- Second structural change in one run: the other device is actively
+        -- editing while we sync, or the download did not change scm.  Do not
+        -- loop; ask the user.
+        return nil, "结构在一次同步里变了两次（" .. tostring(reason) .. "），请重试"
+    end
+    self.adopted = true
+
+    local pending = Store.pending(self.collection)
+    note("adopt server collection (%s): pending cards=%d notes=%d revlog=%d",
+        tostring(reason), #pending.cards, #pending.notes, #pending.revlog)
+
+    -- Close the half-finished incremental session; the download below starts a
+    -- fresh one.
+    pcall(function()
+        self.client:abort()
+    end)
+
+    local downloaded, err = self:full_download()
+    if not downloaded then
+        return nil, err
+    end
+
+    if #pending.cards + #pending.notes + #pending.revlog > 0 then
+        -- pending rows are named tables (what the encoder wants); apply_chunk
+        -- takes wire arrays, so encode them back with usn = -1.
+        local function to_wire(rows, encode)
+            local wire = {}
+            for _, row in ipairs(rows) do
+                wire[#wire + 1] = encode(row, -1)
+            end
+            return wire
+        end
+        Store.apply_chunk(self.collection, {
+            done = true,
+            cards = to_wire(pending.cards, protocol.card_row),
+            notes = to_wire(pending.notes, protocol.note_row),
+            revlog = to_wire(pending.revlog, protocol.revlog_row),
+        })
+        Store.mark_local_modified(self.collection)
+        note("replayed cards=%d notes=%d revlog=%d",
+            #pending.cards, #pending.notes, #pending.revlog)
+    end
+    return true
+end
+
 --- Run one incremental sync.
--- @treturn table { status = "noChanges"|"normal"|"fullRequired", message }
+-- @treturn table { status = "noChanges"|"normal"|"error", message }
 function Runner:sync()
     self:log("meta")
+    if self.collection then
+        -- Pick up col.mod/usn written by reviews since the file was opened.
+        Store.refresh_timestamps(self.collection)
+    end
     local meta, err = self.client:meta()
     if not meta then
         return { status = "error", message = translate_error(err) }
@@ -111,15 +197,31 @@ function Runner:sync()
 
     local needs_full, reason = Store.requires_full_sync(self.collection, meta)
     if needs_full then
-        return { status = "fullRequired", message = reason }
+        note("schema mismatch local=%s server=%s", tostring(self.collection.schema_modified),
+            tostring(meta.scm))
+        local adopted, adopt_error = self:adopt_server_collection(reason)
+        if not adopted then
+            return { status = "error", message = tostring(adopt_error or reason) }
+        end
+        return self:sync()
     end
 
     if meta.mod == self.collection.modified and meta.mod ~= 0 then
+        note("no changes local_mod=%s server_mod=%s usn=%s/%s",
+            tostring(self.collection.modified), tostring(meta.mod),
+            tostring(self.collection.usn), tostring(meta.usn))
         return { status = "noChanges", message = "已是最新" }
     end
+    note("sync local_mod=%s server_mod=%s usn=%s/%s", tostring(self.collection.modified),
+        tostring(meta.mod), tostring(self.collection.usn), tostring(meta.usn))
 
     self:log("start")
-    local graves, start_error = self.client:start(self.collection.usn, false)
+    -- `lnewer` tells the server whether our copy is the newer one; it only
+    -- decides who sends the legacy `config` blob, but sending it wrong is a
+    -- protocol lie the server can act on.
+    local local_is_newer = (tonumber(self.collection.modified) or 0)
+        > (tonumber(meta.mod) or 0)
+    local graves, start_error = self.client:start(self.collection.usn, local_is_newer)
     if graves == nil then
         return { status = "error", message = translate_error(start_error) }
     end
@@ -148,10 +250,18 @@ function Runner:sync()
         or (#(changes.decks[1] or {}) > 0) or (#(changes.decks[2] or {}) > 0)
         or (#(changes.tags or {}) > 0)
     if structural then
-        return {
-            status = "fullRequired",
-            message = "桌面端改了笔记类型/牌组结构，需要整库同步",
-        }
+        local counts = string.format("models=%d decks=%d/%d tags=%d",
+            #(changes.models or {}), #(changes.decks[1] or {}),
+            #(changes.decks[2] or {}), #(changes.tags or {}))
+        note("applyChanges structural %s", counts)
+        -- Structural edits cannot be merged with the card/note tables we know
+        -- how to write, so take the server's collection and replay the local
+        -- reviews instead of making the user choose a side.
+        local adopted, adopt_error = self:adopt_server_collection(counts)
+        if not adopted then
+            return { status = "error", message = tostring(adopt_error or "结构同步失败") }
+        end
+        return self:sync()
     end
 
     local pulled, pull_error = self:pull(meta)
@@ -173,7 +283,12 @@ function Runner:sync()
         return { status = "error", message = translate_error(sanity_error) }
     end
     if status ~= "ok" then
-        return { status = "fullRequired", message = "数据校验不一致" }
+        note("sanity mismatch, taking the server copy")
+        local adopted, adopt_error = self:adopt_server_collection("sanity")
+        if not adopted then
+            return { status = "error", message = tostring(adopt_error or "数据校验不一致") }
+        end
+        return self:sync()
     end
 
     self:log("finish")
@@ -182,6 +297,8 @@ function Runner:sync()
         return { status = "error", message = translate_error(finish_error) }
     end
     Store.after_finish(self.collection, new_mod, meta.usn)
+    note("finished server_mod=%s local_usn_now=%s", tostring(new_mod),
+        tostring(self.collection.usn))
     return { status = "normal", message = "同步完成", new_mod = new_mod }
 end
 
@@ -223,9 +340,22 @@ function Runner:full_download()
     end
 
     -- Keep the old file until the new one is in place; the reverse order would
-    -- lose both if the rename failed.
+    -- lose both if the rename failed.  The handle must be closed first: on
+    -- Windows a rename over an open SQLite file fails, and on any OS the old
+    -- handle would keep pointing at the replaced inode.
+    if self.collection then
+        pcall(self.collection.close, self.collection)
+    end
     os.remove(backup)
-    if io.open(target, "rb") then
+    -- The existence probe must be closed before the rename: on Windows an open
+    -- handle makes os.rename fail, and the whole download then reports
+    -- "无法备份旧库" even though nothing is wrong.
+    local probe = io.open(target, "rb")
+    local target_exists = probe ~= nil
+    if probe then
+        probe:close()
+    end
+    if target_exists then
         local renamed = os.rename(target, backup)
         if not renamed then
             os.remove(raw)

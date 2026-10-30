@@ -366,6 +366,11 @@ local BLOB_COLUMNS = {
     { table = "fields", column = "config", key = { "ntid", "ord" } },
     { table = "templates", column = "config", key = { "ntid", "ord" } },
     { table = "config", column = "val", key = { "KEY" } },
+    -- Not declared BLOB in the schema, but rslib reads them as Vec<u8>; a TEXT
+    -- value makes the card/note unreadable for Anki.
+    { table = "cards", column = "data", key = { "id" } },
+    { table = "notes", column = "data", key = { "id" } },
+    { table = "tags", column = "config", key = { "tag" } },
 }
 
 --- Count rows whose declared-BLOB column holds a non-BLOB storage class.

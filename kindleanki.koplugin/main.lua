@@ -610,6 +610,13 @@ function KindleAnki:full_sync(direction)
             if not uploaded then
                 error(upload_error, 0)
             end
+            -- before_upload rewrote scm/usn/ls in the file that was just sent;
+            -- the in-memory object must follow, or the next sync would compare
+            -- a stale schema against our own upload and ask for another full
+            -- sync (the loop the user reported).
+            if self.collection then
+                pcall(self.collection.reload, self.collection)
+            end
         end
         return direction
     end, debug.traceback)
