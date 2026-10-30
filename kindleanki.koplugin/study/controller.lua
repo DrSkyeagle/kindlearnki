@@ -170,7 +170,9 @@ function Controller.start_study(collection, deck_id, parent_view)
         if UIManager and InfoMessage then
             UIManager:show(InfoMessage:new{
                 text = string.format(_("本轮完成：共 %d 张"), progress.done or 0),
-                timeout = 3,
+                -- The deck list underneath repaints for about a second on
+                -- e-ink; three seconds was gone before the screen settled.
+                timeout = 5,
             })
         end
     end
