@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.2.14] — 2026-10-30
+
+### Fixed
+
+- **点牌组进不去（0.2.12/0.2.13 引入）**：`study/controller.lua` 里把
+  `Controller.card_style()` 写成了小写 `controller.card_style()`，渲染卡片时抛
+  “attempt to call a nil value”，牌组行的回调被 pcall 吞掉，表现就是点了没反应。
+- 卡片外层补 `width:100%; display:block`，避免 MuPDF 把内容按文字宽度收缩后居中
+  造成左边大留白。
+
+### Added
+
+- `harness/study_tap.lua`：模拟点击第一个牌组行 → 断言复习页真的打开并截图
+  （`10-study-from-deck.png`）。这个用例在 0.2.12 就能抓到上面的错。
+- `tests/test_module_paths.lua`：锁住 `Controller.card_style()` 的大小写。
+- `harness/smoke_main.lua`：真实调用 `card_style()` 并检查返回的样式串。
+
 ## [0.2.13] — 2026-10-30
 
 ### Fixed

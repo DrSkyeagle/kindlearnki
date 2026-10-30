@@ -32,4 +32,13 @@ return {
         assert(source:find("onShowKeyboard", 1, true),
             "the dialog no longer opens the keyboard; Voyage users would have to find the field")
     end,
+
+    ["controller calls its own helper with the right case"] = function()
+        -- A lowercase `controller.card_style()` slipped through once and made
+        -- every card render fail, so tapping a deck did nothing.
+        local source = Helpers.read("study/controller.lua")
+        assert(not source:match("[^%w_%.]controller%.card_style"),
+            "lowercase controller.card_style() is back")
+        assert(source:find("Controller.card_style()", 1, true))
+    end,
 }

@@ -72,3 +72,9 @@ probe:write("x")
 probe:close()
 os.remove(paths.root .. "/probe.txt")
 print("SMOKE fresh-directory data dir ok")
+
+-- The typo that broke tapping a deck lived in this helper; call it for real.
+local controller = require("study.controller")
+local style = controller.card_style()
+assert(style and style:find("font-size:", 1, true), "card_style is broken: " .. tostring(style))
+print("SMOKE card_style ok: " .. style)
