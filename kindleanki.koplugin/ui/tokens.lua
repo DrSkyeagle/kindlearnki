@@ -124,13 +124,10 @@ Tokens.exit_text = "×"
 Tokens.empty_text = "没有到期的卡片"
 Tokens.all_decks_prefix = "全部牌组一起复习"
 
--- 复习页的标题栏 / 正文元信息。 版式与参考实现
--- (yizhixiaoheigou/kindle-anki v0.2.0) 一致：标题栏放牌组名，正文第一行放
--- "第 N / M 张"，第二行放当前是正面还是背面。
+-- 复习页标题栏的计数。 参考实现把 "第 N / M 张" 单独占一行、再一行写
+-- "卡片正面/背面"；这里两项都精简掉了：计数并进标题栏，正/背面由按钮区分。
 Tokens.study_title = "复习"
 Tokens.card_position_text = "第 %d / %d 张"
-Tokens.card_front_text = "卡片正面"
-Tokens.card_back_text = "卡片背面"
 
 --- `已 N · 余 M` -- never `N/M`, which reads as a fraction of the whole deck.
 -- @int done

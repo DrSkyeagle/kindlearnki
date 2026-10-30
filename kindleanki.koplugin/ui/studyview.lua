@@ -211,27 +211,9 @@ end
 
 --- @treturn string html body, @treturn string card stylesheet
 function StudyView:_build_html(css)
-    local progress = self.progress or {}
-    local done = math.max(0, math.floor(tonumber(progress.done) or 0))
-    local remaining = math.max(0, math.floor(tonumber(progress.remaining) or 0))
-    local total = done + remaining
-    local position = done + 1
-    if total > 0 and position > total then
-        position = total
-    end
-
-    local parts = {}
-    -- An empty session is not "第 1 / 1 张": say there is nothing due instead
-    -- of inventing a card.
-    if total > 0 then
-        -- Two lines, as the reference reader renders them: which card you are
-        -- on, and which side you are looking at.
-        parts[#parts + 1] = string.format('<div class="ka-meta">%s</div>',
-            escape_html(string.format(Tokens.card_position_text, position, total)))
-        parts[#parts + 1] = string.format('<div class="ka-meta">%s</div>',
-            self.show_answer and Tokens.card_back_text or Tokens.card_front_text)
-    end
-
+    -- No "第 N / M 张" and no "卡片正面/背面" line above the card: the counter
+    -- lives in the title bar, and the face is obvious from the buttons.  The
+    -- saved band goes to the card text.
     local data = self.face or {}
     local html = self.show_answer and data.answer_html or data.html
     if type(html) ~= "string" or html == "" then
@@ -247,26 +229,41 @@ function StudyView:_build_html(css)
                 escape_html(Tokens.empty_text))
         end
     end
-    parts[#parts + 1] = html
 
     -- Inline styles inside the card are sanitised too: notes often carry
     -- `text-align:center` / margin / background on their own tags, which the
     -- template-stylesheet stripper never sees.
-    return Tokens.sanitize_html(table.concat(parts, string.char(10))),
-        (type(css) == "string" and css or "")
+    return Tokens.sanitize_html(html), (type(css) == "string" and css or "")
 end
 
 --==========================================================================
 -- Buttons
 --==========================================================================
 
+--- Rating button label: "重来 10 分钟".  A space, not "·", keeps the four
+--- cells of the single row comfortable on a 1072 px panel.
 function StudyView:_rating_label(index)
     local label = Tokens.rating_labels[index] or tostring(index)
     local interval = humanize_interval(self.intervals and self.intervals[index])
     if interval ~= "" then
-        return string.format("%s · %s", label, interval)
+        return string.format("%s %s", label, interval)
     end
     return label
+end
+
+--- Counter shown in the title bar next to the deck name.
+function StudyView:_title_text()
+    local progress = self.progress or {}
+    local done = math.max(0, math.floor(tonumber(progress.done) or 0))
+    local remaining = math.max(0, math.floor(tonumber(progress.remaining) or 0))
+    local total = done + remaining
+    local name = deck_title(self.deck_name)
+    if total <= 0 then
+        return name
+    end
+    local position = math.min(done + 1, total)
+    return string.format("%s    %s", name,
+        string.format(Tokens.card_position_text, position, total))
 end
 
 function StudyView:_build_buttons()
@@ -280,18 +277,17 @@ function StudyView:_build_buttons()
     end
     local rows = {}
     if self.show_answer then
+        -- One row of four, as asked: the four ratings are the primary action
+        -- and the intervals ride along in the same cell.
         local function rate(index)
             return function() self:_rate(Tokens.rating_values[index]) end
         end
-        rows[1] = {
+        return { {
             { text = self:_rating_label(1), callback = rate(1) },
             { text = self:_rating_label(2), callback = rate(2) },
-        }
-        rows[2] = {
             { text = self:_rating_label(3), callback = rate(3) },
             { text = self:_rating_label(4), callback = rate(4) },
-        }
-        return rows
+        } }
     end
     -- Front: one full-width bar, exactly like the reference card reader.  The
     -- way out is the title-bar ×, so no extra "exit" row eats a whole band.
@@ -351,7 +347,11 @@ function StudyView:_rebuild()
         width = content_w,
         align = "left",
         with_bottom_line = true,
-        title = deck_title(self.deck_name),
+        -- Deck name plus "第 N / M 张" on one line.  No wrapping: a long name
+        -- must not change the title bar height, or the text area would move
+        -- between cards; TitleBar shrinks the font and then truncates.
+        title = self:_title_text(),
+        title_multilines = false,
         show_parent = self,
         close_callback = function() self:close() end,
     }
