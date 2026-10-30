@@ -193,6 +193,12 @@ function KindleAnki:build_submenu()
             end,
         },
         {
+            text = _("网络诊断"),
+            callback = function()
+                self:network_selftest()
+            end,
+        },
+        {
             text = _("关于"),
             callback = function()
                 self:show_about()
@@ -358,25 +364,75 @@ function KindleAnki:prompt_login(then_sync)
     end
     local started, err = pcall(Login.start, {
         on_submit = function(email, password)
-            local done = self:busy(_("正在登录 AnkiWeb…"))
-            local client = self:build_client()
-            local hkey, login_error = client:host_key(email, password)
-            done()
-            if not hkey then
-                show_message(_("登录失败：") .. tostring(login_error))
-                return
-            end
-            self:save_setting("hkey", hkey)
-            show_message(_("登录成功。"))
-            if then_sync then
-                self:run_sync()
-            end
+            Log.info("login: submit received, len(email)=" .. tostring(#email))
+            --[[ The request runs one tick after the dialog closes: tearing the
+            keyboard down and starting a blocking TLS handshake in the same
+            callback is the one thing that differs from every KOReader dialog,
+            and any native crash in the TLS stack must happen *after* the UI has
+            settled so the last line in crash.log still tells us which stage
+            ran. ]]
+            UIManager:scheduleIn(0.3, function()
+                local finished, failure = xpcall(function()
+                    Log.info("login: host_key begin")
+                    local done = self:busy(_("正在登录 AnkiWeb…"))
+                    local client = self:build_client()
+                    local hkey, login_error = client:host_key(email, password)
+                    done()
+                    Log.info("login: host_key returned",
+                        hkey and "ok" or ("error=" .. tostring(login_error)))
+                    if not hkey then
+                        show_message(_("登录失败：") .. tostring(login_error))
+                        return
+                    end
+                    self:save_setting("hkey", hkey)
+                    show_message(_("登录成功。"))
+                    if then_sync then
+                        self:run_sync()
+                    end
+                end, debug.traceback)
+                if not finished then
+                    Log.err("login: callback failed:", failure)
+                    show_message(_("登录过程出错，详情见 crash.log。"))
+                end
+            end)
         end,
     })
     if not started then
         Log.err("cannot start login dialog:", err)
         show_message(_("无法打开登录界面，详情见 crash.log。"))
     end
+end
+
+--- Reachability probe for the "网络诊断" menu entry.
+--
+-- Everything is logged stage by stage; the device cannot be debugged from here,
+-- so the user runs this once and sends crash.log.
+function KindleAnki:network_selftest()
+    local ok, Transport = pcall(require, "sync.transport")
+    if not ok then
+        show_message("网络诊断不可用：" .. tostring(Transport))
+        return true
+    end
+
+    local done = self:busy(_("正在测试网络…"))
+    local steps = Transport.selftest("sync.ankiweb.net")
+    done()
+
+    local lines = { _("网络诊断结果：") }
+    local all_ok = true
+    for _, step in ipairs(steps) do
+        lines[#lines + 1] = string.format("%s %s（%s）",
+            step.ok and "✓" or "✗", step.stage, tostring(step.detail))
+        if not step.ok then
+            all_ok = false
+        end
+    end
+    if all_ok then
+        lines[#lines + 1] = ""
+        lines[#lines + 1] = _("网络与证书校验正常。")
+    end
+    show_message(table.concat(lines, "\n"))
+    return true
 end
 
 --- Ask which side wins when the schema differs.

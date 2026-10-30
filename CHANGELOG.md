@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.4] — 2026-10-30
+
+### Added
+
+- **网络诊断**菜单项：分步检查 `require socket` → TCP 连接 → `require ssl` →
+  TLS 握手（含 CA 校验），每步写 crash.log 并弹中文结果。它不需要账号，能在
+  “登录”之前单独验证原生 TLS 栈。
+
+### Changed
+
+- 登录提交改为**延后 0.3 秒**执行（`UIManager:scheduleIn`），让对话框/键盘收尾
+  完成后再开始阻塞式 TLS；整段用 `xpcall` + traceback 包裹。
+- 登录与 HTTP 全链路加**分步日志**：`login: submit` → `login: host_key begin`
+  → `http: request` → `http: connecting` → `http: returned …` → `login: host_key
+  returned`。原生崩溃无法被 pcall 捕获，crash.log 的最后一行就是最后完成的阶段。
+- `sync/transport.lua` 明确区分 LuaSocket 的三种返回形态（成功 / nil,err /
+  抛异常），并设置 `socketutil` 的连接超时。
+
 ## [0.2.3] — 2026-10-30
 
 ### Fixed
