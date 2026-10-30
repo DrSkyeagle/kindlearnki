@@ -12,6 +12,9 @@ Two modes:
                  client adopt the server collection (download) and replay its
                  pending rows, then sync again.
 
+  chunkfail   -- the first applyChunk fails with HTTP 500, so the client must
+                 keep the rows pending; the next sync pushes them successfully.
+
 Every request body is appended to LOG (one JSON object per line) so a test can
 assert what actually went over the wire.
 
@@ -95,6 +98,7 @@ class State:
         self.scm = row[1]
         self.usn = row[2]
         self.structural_pending = args.mode == "structural"
+        self.chunk_failed_once = False
         self.requests = 0
 
     def record(self, path, body):
@@ -181,6 +185,10 @@ def make_handler(state):
                 self._send(zcompress(json.dumps({"done": True}).encode()))
             elif path == "applyChunk":
                 state.record("applyChunk.pg", body)
+                if state.args.mode == "chunkfail" and not state.chunk_failed_once:
+                    state.chunk_failed_once = True
+                    self._send(b"the server exploded", status=500)
+                    return
                 self._send(zcompress(b"{}"))
             elif path == "sanityCheck2":
                 reply = {"status": "ok", "c": [0], "s": [0]}
@@ -205,7 +213,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=9123)
     parser.add_argument("--fixture", required=True)
-    parser.add_argument("--mode", choices=["normal", "structural"], default="normal")
+    parser.add_argument("--mode",
+        choices=["normal", "structural", "chunkfail"], default="normal")
     parser.add_argument("--log", required=True)
     args = parser.parse_args()
 

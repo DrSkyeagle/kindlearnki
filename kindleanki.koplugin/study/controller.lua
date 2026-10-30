@@ -79,6 +79,9 @@ end
 
 --- Start a study session for one deck (nil / 1 = all decks).
 function Controller.start_study(collection, deck_id, parent_view)
+    -- `parent_view` is the deck list (shown underneath); it is refreshed when
+    -- the session ends so its counts are not stale.
+    local deck_view = parent_view
     local StudyView, load_error = load_ui("ui.studyview")
     if not StudyView then
         return nil, tostring(load_error)
@@ -136,6 +139,21 @@ function Controller.start_study(collection, deck_id, parent_view)
     -- the generic "复习" even though the session knows where it is.
     local deck_label = session:deck_name()
 
+    --- Repaint the deck list with fresh counts.
+    --
+    -- The deck list is built once when it is opened; without this it keeps the
+    -- numbers it had before the session, so after studying six cards the row
+    -- still says 6 -- which reads as "the reviews were not saved".
+    local function refresh_decks()
+        if not deck_view or type(deck_view.update) ~= "function" then
+            return
+        end
+        local ok, data = pcall(DeckList.build, collection)
+        if ok and data then
+            deck_view:update(data.decks, data.total, data.date_text)
+        end
+    end
+
     --- End of the queue: leave the card screen and say so.
     --
     -- Keeping it open showed "第 4 / 4 张" with a still-visible 显示答案 bar and
@@ -143,6 +161,7 @@ function Controller.start_study(collection, deck_id, parent_view)
     local function finish_round()
         local progress = session:progress()
         Controller.close(view)
+        refresh_decks()
         -- Slash form on purpose: requiring "ui.uimanager" (dots) loads a
         -- SECOND copy of the module, with its own window stack, so the message
         -- would never appear on the real UI.
@@ -191,7 +210,8 @@ function Controller.start_study(collection, deck_id, parent_view)
             Controller.close(view)
             -- The deck list is still in the widget stack underneath; closing
             -- the study screen reveals it.  Re-showing it here would raise
-            -- "already shown".
+            -- "already shown", so refresh its numbers instead.
+            refresh_decks()
         end,
     }
     view:show()

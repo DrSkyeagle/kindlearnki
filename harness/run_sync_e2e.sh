@@ -11,7 +11,7 @@ PLUGIN_DIR=${PLUGIN_DIR:-/mnt/d/ankindle/kindleanki.koplugin}
 PORT=${PORT:-9123}
 
 fail=0
-for mode in normal structural; do
+for mode in normal structural chunkfail; do
     log="/tmp/mock-sync-${mode}.jsonl"
     rm -f "$log"
     python3 /mnt/d/ankindle/harness/mock_ankiweb.py \

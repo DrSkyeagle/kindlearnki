@@ -26,6 +26,14 @@ return {
         assert(source:find("Controller.close(view)", 1, true),
             "the study screen is not closed when the queue is empty")
     end,
+    ["the deck list is refreshed when a session ends"] = function()
+        local source = Helpers.read("study/controller.lua")
+        assert(source:find("refresh_decks", 1, true),
+            "the deck list keeps pre-session counts after studying")
+        assert(source:find("deck_view:update(", 1, true),
+            "the deck list data is never replaced")
+    end,
+
     ["the end-of-round message uses the real UIManager"] = function()
         local source = Helpers.read("study/controller.lua")
         -- `require("ui.uimanager")` builds a second module instance with its own

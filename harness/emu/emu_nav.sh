@@ -20,6 +20,7 @@
 #   emu_nav.sh card [ROW]       decklist + study (alias for study)
 #   emu_nav.sh answer           tap 显示答案 on the study screen
 #   emu_nav.sh rate N           rate the current card 1..4 (重来/困难/记住/太简单)
+#   emu_nav.sh sync             press the deck screen's 同步 button
 #   emu_nav.sh close            close the top KindleAnki screen
 #   emu_nav.sh hook N           call _G.KindleAnkiDebug.open_study(N) if present
 #   emu_nav.sh state            print what is currently on screen
@@ -202,6 +203,17 @@ cmd_rate() {
     fi
 }
 
+cmd_sync() {
+    # The deck screen's 同步 button runs whatever controller passed as
+    # `on_sync`; calling the field directly is the closest we get to a tap in
+    # this machine (touch injection does not reach the guest).
+    local idx
+    require_inspector
+    idx=$(find_widget kindleanki_deckview) || die "deck list is not open"
+    insp_q "/koreader/UIManager/_window_stack/$idx/widget/on_sync/"
+    log "pressed 同步 on the deck screen"
+}
+
 cmd_close() {
     local idx
     require_inspector
@@ -234,6 +246,7 @@ case "${1:-}" in
     study | card) shift; cmd_study "${1:-1}" ;;
     answer) cmd_answer ;;
     rate) shift; cmd_rate "${1:-}" ;;
+    sync) cmd_sync ;;
     close) cmd_close ;;
     hook) shift; cmd_hook "${1:-}" ;;
     *)

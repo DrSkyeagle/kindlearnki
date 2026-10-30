@@ -135,7 +135,27 @@ local ok_all, err = pcall(function()
     local result = runner:sync()
     print("E2E-RESULT status=" .. tostring(result.status)
         .. " message=" .. tostring(result.message))
-    check(result.status == "normal", "sync finished normally")
+
+    if mode == "chunkfail" then
+        -- The push was rejected: the review must stay pending instead of being
+        -- marked as sent, and the next sync must deliver it.
+        check(result.status ~= "normal", "a rejected push reports a failure")
+        local Store = require("sync.store")
+        local pending = Store.pending(collection)
+        local still_pending = false
+        for _, row in ipairs(pending.cards or {}) do
+            if tonumber(row.id) == tonumber(card.id) then
+                still_pending = true
+            end
+        end
+        check(still_pending, "the card is still pending after the failed push")
+        local retry = runner:sync()
+        print("E2E-RETRY status=" .. tostring(retry.status))
+        check(retry.status == "normal", "the retry sync succeeds")
+    end
+    if mode ~= "chunkfail" then
+        check(result.status == "normal", "sync finished normally")
+    end
 
     if mode == "structural" then
         check(saw("download"), "structure change made the client adopt the server copy")
