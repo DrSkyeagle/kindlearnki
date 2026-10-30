@@ -48,6 +48,18 @@ Client.__index = Client
 
 Client.MAX_REDIRECTS = protocol.MAX_REDIRECTS
 
+-- AnkiWeb answers the first request for a user with a redirect to the sync
+-- host assigned to that account.  It uses 303 (See Other); proxies use 307/308,
+-- and some middleboxes emit 301/302.  All of them mean "repeat this request
+-- against Location", which is what rslib does for the same response.
+local REDIRECT_STATUS = {
+    [301] = true,
+    [302] = true,
+    [303] = true,
+    [307] = true,
+    [308] = true,
+}
+
 local SESSION_ALPHABET =
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 local SESSION_LENGTH = 6
@@ -297,7 +309,7 @@ function Client:_request(method, body, opts)
         local response_body = response.body or ""
         local response_headers = response.headers or {}
 
-        if status == 308 then
+        if REDIRECT_STATUS[status] then
             redirects = redirects + 1
             if redirects > Client.MAX_REDIRECTS then
                 return nil, string.format(
@@ -306,8 +318,9 @@ function Client:_request(method, body, opts)
             end
             local location = header_value(response_headers, "location")
             if type(location) ~= "string" or location == "" then
-                return nil, "服务器要求跳转（HTTP 308）但没有给出 Location "
-                    .. "地址，请稍后重试。"
+                return nil, string.format(
+                    "服务器要求跳转（HTTP %d）但没有给出 Location 地址，"
+                        .. "请稍后重试。", status)
             end
             local new_base, next_url = redirect_target(location, url,
                 self.endpoint, method)

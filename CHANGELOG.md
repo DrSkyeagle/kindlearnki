@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.9] — 2026-10-30
+
+### Fixed
+
+- **整库同步 HTTP 303**：设备日志显示 `POST https://sync.ankiweb.net/sync/download`
+  → `code=303`。AnkiWeb 用 **303 See Other** 把账号分流到 `sync{N}.ankiweb.net`，
+  而客户端只处理了 308，于是把 303 当成错误。现在 301/302/303/307/308 统一按
+  “向 Location 重发同一请求”处理（与 rslib 行为一致），并把分配到的 host 记在
+  `client.endpoint` 上；重定向次数上限仍是 `Client.MAX_REDIRECTS`。
+
+### Added
+
+- `tests/test_client.lua`：303 到主机根、303 到完整路由、303 缺 Location 三种用例。
+
 ## [0.2.8] — 2026-10-30
 
 首次整库同步在设备上走不通，USB 日志（`/f/koreader/crash.log`）给出三处连锁问题：

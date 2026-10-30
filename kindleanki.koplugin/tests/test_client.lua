@@ -622,4 +622,52 @@ return {
         package.loaded["sync.client"] = saved_client
         assert(ok, result)
     end,
+
+    ["follows a 303 See Other to the assigned sync host"] = function()
+        -- AnkiWeb answers with 303, not 308: this is the exact response the
+        -- device log showed for /sync/download before the fix.
+        if not ZSTD_OK then
+            return
+        end
+        local transport = scripted({
+            {
+                status = 303,
+                headers = { location = "https://sync5.ankiweb.net/" },
+                body = "{}",
+            },
+            { body = fixture("ankiweb_meta_resp.zst") },
+        })
+        local client = Client.new{ transport = transport }
+        local meta, err = client:meta()
+        assert(meta, err)
+        assert(client.endpoint == "https://sync5.ankiweb.net/", client.endpoint)
+        assert(request_at(transport, 2).url
+            == "https://sync5.ankiweb.net/sync/meta")
+    end,
+
+    ["a 303 that points at a full route keeps the method URL"] = function()
+        if not ZSTD_OK then
+            return
+        end
+        local transport = scripted({
+            { status = 303, headers = { location = "https://sync5.ankiweb.net/sync/meta" } },
+            { body = fixture("ankiweb_meta_resp.zst") },
+        })
+        local client = Client.new{ transport = transport }
+        local meta, err = client:meta()
+        assert(meta, err)
+        assert(request_at(transport, 2).url
+            == "https://sync5.ankiweb.net/sync/meta")
+    end,
+
+    ["a 303 without Location is reported as such"] = function()
+        if not ZSTD_OK then
+            return
+        end
+        local client = Client.new{ transport = scripted({ { status = 303 } }) }
+        local meta, err = client:meta()
+        assert(meta == nil)
+        assert(type(err) == "string" and err:find("303", 1, true), err)
+        assert(err:find("Location", 1, true), err)
+    end,
 }
