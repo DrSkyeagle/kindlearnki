@@ -33,6 +33,21 @@ end
 
 --- Show the deck list.
 -- @tparam table opts { on_close = function() }
+--- Inline style for the card body: 64 px-ish text, paper white, hard left.
+function Controller.card_style()
+    local width, height = 1072, 1448
+    local ok_device, Device = pcall(require, "device")
+    if ok_device and Device and Device.screen then
+        width = Device.screen:getWidth()
+        height = Device.screen:getHeight()
+    end
+    local Tokens = require("ui.tokens")
+    local px = Tokens.body_font_px(width, height)
+    return string.format(
+        "font-size:%dpx;background-color:#fff;color:#000;text-align:left;"
+            .. "margin:0;padding:0;", px)
+end
+
 function Controller.show_decks(collection, opts)
     opts = opts or {}
     local DeckView, load_error = load_ui("ui.deckview")
@@ -104,7 +119,11 @@ function Controller.start_study(collection, deck_id, parent_view)
             if extra_class then
                 classes = classes .. " " .. extra_class
             end
-            return string.format('<div class="%s">%s</div>', classes, html or "")
+            -- Inline styles win over the template's stylesheet in MuPDF; the
+            -- appended `.card { … }` rule alone was not enough to override
+            -- `text-align: center` and the tiny font baked into Anki's CSS.
+            return string.format('<div class="%s" style="%s">%s</div>',
+                classes, controller.card_style(), html or "")
         end
 
         local card_class = "card" .. tostring((item.card.ord or 0) + 1)

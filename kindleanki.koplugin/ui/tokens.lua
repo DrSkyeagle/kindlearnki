@@ -274,8 +274,10 @@ end
 function Tokens.body_font_px(width, height)
     width = tonumber(width) or 1072
     height = tonumber(height) or 1448
-    local by_width = math.floor(width / 26)
-    local by_height = math.floor(height / 34)
+    -- 6% of the panel width lands on 64 px for a 1072-wide Voyage panel and
+    -- still scales down for the 708-wide emulator window.
+    local by_width = math.floor(width * 0.06)
+    local by_height = math.floor(height / 22)
     local px = math.min(by_width, by_height)
     if px < 24 then
         px = 24
@@ -290,6 +292,27 @@ end
 -- The cascade would otherwise let the template's px value override the base
 -- font passed to the HTML box.  `em`/`%` sizes that remain inherit from the new
 -- base, which keeps relative emphasis intact.
+--- Drop painted backgrounds so the card sits on the panel's own paper.
+--
+-- Anki decks often carry ruled/grey/photo backgrounds; on a 16-level e-ink
+-- panel they turn into dithering and swallow the text.  Text colour is kept so
+-- intentional emphasis survives.
+function Tokens.strip_backgrounds(css)
+    css = tostring(css or "")
+    -- Data URIs contain ";" inside url(...), so the shorthand is only stripped
+    -- when the value has no url(); background-image is handled separately.
+    css = css:gsub("background%-image%s*:%s*[^;}]+;?", "")
+    css = css:gsub("background%-color%s*:%s*[^;}]+;?", "")
+    css = css:gsub("box%-shadow%s*:%s*[^;}]+;?", "")
+    css = css:gsub("background%s*:%s*([^;}]+);?", function(value)
+        if value:lower():find("url%(", 1) then
+            return "background:" .. value .. ";"
+        end
+        return ""
+    end)
+    return css
+end
+
 function Tokens.strip_font_size(css)
     css = tostring(css or "")
     -- Only absolute units: `em`/`%` should keep inheriting from the new base.

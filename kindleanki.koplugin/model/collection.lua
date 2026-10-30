@@ -111,6 +111,11 @@ end
 -- Decks
 --==========================================================================
 
+--- Anki stores the deck hierarchy separator as 0x1f; the UI expects "::".
+function Collection.printable_deck_name(name)
+    return (tostring(name or ""):gsub(string.char(31), "::"))
+end
+
 function Collection:load_decks()
     if self.decks_loaded then
         return
@@ -123,9 +128,12 @@ function Collection:load_decks()
         -- Deck.kind is a oneof: field 1 = Normal (whose field 1 is config_id),
         -- field 2 = Filtered.
         local normal = PB.message(kind, 1)
+        -- Anki stores the hierarchy separator as 0x1f in the database; the UI
+        -- (and every "::" pattern here) expects the printable form.
+        local printable_name = Collection.printable_deck_name(name)
         local deck = {
             id = id,
-            name = name,
+            name = printable_name,
             common_blob = common_blob,
             filter_id = PB.message(kind, 2) and id or nil,
             config_id = normal and PB.uint(normal, 1, 1) or 1,

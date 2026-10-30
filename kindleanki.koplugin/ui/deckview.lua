@@ -354,7 +354,10 @@ function DeckView:_layout()
             local count_w = Widgets.text_width(faces.deck_count, count_text)
             row.count_x = content_right - count_w
             local name_max = row.count_x - gap * 2 - row.name_x
-            row.name = Widgets.truncate(faces.deck, tostring(deck.name or ""), name_max)
+            -- Rows show the last path component; indentation carries the
+            -- hierarchy, so "好文章::知乎好文章" reads as "知乎好文章" one level in.
+            row.name = Widgets.truncate(faces.deck,
+                tostring(deck.display_name or deck.name or ""), name_max)
             row.name_right = row.name_x + Widgets.text_width(faces.deck, row.name)
             layout.rows[#layout.rows + 1] = row
             add_zone(Widgets.box(content_x, row_top, content_w, row_h),

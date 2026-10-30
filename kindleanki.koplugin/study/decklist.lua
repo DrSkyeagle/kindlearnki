@@ -51,15 +51,18 @@ function DeckList.build(collection, opts)
 
     local max_depth = tonumber(opts.max_depth) or DeckList.MAX_DEPTH
     for _, deck in ipairs(sorted) do
-        local depth = depth_of(deck.name)
+        -- Be defensive about the storage separator too: the UI and the parent
+        -- links both expect the printable "::" form.
+        local name = tostring(deck.name):gsub(string.char(31), "::")
+        local depth = depth_of(name)
         if depth < max_depth then
             -- Sub-subdecks stay hidden; the parent row already counts them,
             -- because Queue.counts sums the whole subtree.
             local counts = Queue.counts(collection, deck.id, now, today)
             decks[#decks + 1] = {
                 id = deck.id,
-                name = deck.name,
-                display_name = display_name(deck.name),
+                name = name,
+                display_name = display_name(name),
                 depth = depth,
                 counts = counts,
                 total = counts.new + counts.learning + counts.review,

@@ -265,8 +265,9 @@ function StudyView:_load_html_body(html, css, resource_dir, key)
         -- Size the card from the screen, and drop the template's pinned
         -- `font-size` so that size actually applies.
         local body_px = Tokens.body_font_px(Screen:getWidth(), Screen:getHeight())
-        local card_css = Tokens.strip_font_size(css)
-            .. string.format("\n.card{font-size:%dpx;}", body_px)
+        local card_css = Tokens.strip_backgrounds(Tokens.strip_font_size(css))
+            .. string.char(10)
+            .. string.format(".card{font-size:%dpx;background-color:#fff;color:#000;margin:0;padding:0;text-align:left;}", body_px)
         body:setContent(html, card_css, body_px, nil, nil, resource_dir)
     end)
     if not ok then
@@ -430,7 +431,8 @@ function StudyView:_layout()
     local action_top = height - action_h
     layout.action = Widgets.box(0, action_top, width, action_h)
     layout.action_top = action_top
-    layout.body = Widgets.box(content_x, body_top, content_w, action_top - gap - body_top)
+    -- 卡片区四边贴边：左右通栏、下沿到答案栏、上沿到进度行下方。
+    layout.body = Widgets.box(0, body_top, width, action_top - body_top)
     if layout.body.h < 0 then
         layout.body.h = 0
     end
@@ -618,11 +620,8 @@ function StudyView:_paint_body(bb, x, y, colors)
         -- Single-page cards are optically centred (the widget was shrunk to its
         -- content in `_load_html_body`); multi-page ones start at the top of the
         -- box, like a page of a book.
+        -- 贴顶：卡片从正文区上沿开始，不再垂直居中留出大片空白。
         local offset = 0
-        local widget_h = (self.body.dimen and self.body.dimen.h) or box.h
-        if self.body_page_count <= 1 and widget_h < box.h then
-            offset = math.floor((box.h - widget_h) / 2)
-        end
         local ok, err = pcall(self.body.paintTo, self.body, bb, x + box.x, y + box.y + offset)
         if not ok then
             logger.warn("kindleanki: card body paint failed:", err)

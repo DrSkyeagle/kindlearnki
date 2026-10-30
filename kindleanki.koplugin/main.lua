@@ -301,7 +301,13 @@ function KindleAnki:onKindleAnkiStudy()
 
     local ok, result = xpcall(function()
         local Controller = require("study.controller")
-        return Controller.show_decks(collection)
+        return Controller.show_decks(collection, {
+            -- The deck screen has its own 同步 button; without this callback it
+            -- was a dead zone that swallowed the tap.
+            on_sync = function()
+                self:run_sync()
+            end,
+        })
     end, debug.traceback)
     if not ok then
         Log.err("study screen failed:", result)

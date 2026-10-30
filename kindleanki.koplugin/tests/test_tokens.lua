@@ -214,4 +214,18 @@ return {
         assert(out:find("1.2em", 1, true), out)
         assert(out:find("color:#000", 1, true), out)
     end,
+
+    ["strip_backgrounds drops painted backgrounds but keeps text colour"] = function()
+        local css = ".card{background:#eee;background-image:url(x.png);color:#333;"
+            .. "box-shadow:0 0 2px #000}"
+        local out = Tokens.strip_backgrounds(css)
+        assert(not out:find("#eee", 1, true), out)
+        assert(not out:find("url(x.png)", 1, true), out)
+        assert(not out:find("box-shadow", 1, true), out)
+        assert(out:find("color:#333", 1, true), out)
+    end,
+
+    ["Voyage lands on 64px"] = function()
+        assert(Tokens.body_font_px(1072, 1448) == 64, Tokens.body_font_px(1072, 1448))
+    end,
 }

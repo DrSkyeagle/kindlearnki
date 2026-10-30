@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.2.13] — 2026-10-30
+
+### Fixed
+
+- **0.2.12 的分隔符归一化写错了字节**：源码里落成的是 0x19（Python 把 ``
+  按八进制解释），而 Anki 用的是 **0x1F**，所以三级牌组依旧显示。改为
+  `string.char(31)`，并把转换抽成 `Collection.printable_deck_name` 加了回归测试。
+
+## [0.2.12] — 2026-10-30
+
+### Fixed
+
+- **三级牌组仍显示**：Anki 数据库里牌组名的层级分隔符是 `0x1f`，不是 `::`；
+  `depth_of()` 因此全部算成 0，过滤形同虚设。`Collection:load_decks` 现在把 `0x1f`
+  归一成 `::`，`DeckList.build` 也做了同样防御。
+- **牌组页的“同步”按钮无反应**：`Controller.show_decks` 只在传入 `on_sync` 时才挂回调，
+  而 `main` 调它时没传，点击落进空函数。已接上 `self:run_sync()`。
+- **卡片偏小 / 底色干扰**：
+  - 字号按屏宽 6% 计算，Voyage 上正好 **64px**（原来被模板的 `20px` 压住）；
+  - `Tokens.strip_backgrounds` 去掉 `background-color` / `background-image` / `box-shadow`
+    以及不含 `url()` 的 `background` 简写（含 data URI 的保留，避免把 CSS 撕坏）；
+  - 卡片外层 div 加内联样式（MuPDF 对内联样式优先级最高）：白底、黑字、左对齐、无边距；
+  - 正文区改为左右通栏、下沿贴到答案栏、内容**贴顶**显示，不再垂直居中留白。
+
+### Added
+
+- `tests/test_decklist.lua` 用 `0x1f` 构造真实存储形态；`tests/test_tokens.lua` 覆盖
+  64px 目标与底色剥离。
+
 ## [0.2.11] — 2026-10-30
 
 同步成功后的三处使用反馈：

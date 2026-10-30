@@ -2,12 +2,14 @@
 
 local DeckList = require("study.decklist")
 
+local SEP = string.char(31)
+
 local function make_collection()
     local decks = {
         { id = 1, name = "默认" },
         { id = 2, name = "机器学习" },
-        { id = 3, name = "机器学习::深度学习", parent = 2 },
-        { id = 4, name = "机器学习::深度学习::CNN", parent = 3 },
+        { id = 3, name = "机器学习" .. SEP .. "深度学习", parent = 2 },
+        { id = 4, name = "机器学习" .. SEP .. "深度学习" .. SEP .. "CNN", parent = 3 },
         { id = 5, name = "日语" },
     }
     local by_id = {}
@@ -29,7 +31,7 @@ local function make_collection()
         local root = by_id[id].name
         local ids = {}
         for _, deck in ipairs(decks) do
-            if deck.name == root or deck.name:sub(1, #root + 2) == root .. "::" then
+            if deck.name == root or deck.name:sub(1, #root + 1) == root .. SEP then
                 ids[#ids + 1] = deck.id
             end
         end

@@ -108,4 +108,11 @@ return {
         local paths = Paths.new("/mnt/us/koreader", "/mnt/us/koreader/settings")
         assert(not paths.collection:find("ankiweb", 1, true))
     end,
+
+    ["deck names use the printable separator"] = function()
+        local name = "好文章" .. string.char(31) .. "知乎好文章"
+        assert(Collection.printable_deck_name(name) == "好文章::知乎好文章",
+            Collection.printable_deck_name(name))
+        assert(Collection.printable_deck_name("plain") == "plain")
+    end,
 }

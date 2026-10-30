@@ -98,8 +98,14 @@ assert(item, "no card to show")
 local faces = Render.card_faces(item.notetype, item.note, item.card, item.context)
 local css = faces.css or item.notetype.css or ""
 local function wrap(html)
-    return string.format('<div class="card card%s">%s</div>',
-        tostring((item.card.ord or 0) + 1), html or "")
+    -- Same inline style the plugin's controller applies, so the screenshot shows
+    -- what the device will actually render.
+    local Tokens = require("ui.tokens")
+    local px = Tokens.body_font_px(Screen:getWidth(), Screen:getHeight())
+    return string.format(
+        '<div class="card card%s" style="font-size:%dpx;background-color:#fff;'
+            .. 'color:#000;text-align:left;margin:0;padding:0;">%s</div>',
+        tostring((item.card.ord or 0) + 1), px, html or "")
 end
 
 local study_view
