@@ -1,26 +1,35 @@
--- Guard against module paths that exist in some KOReader releases but not in
--- the one this plugin targets.
+-- Guards for the two device-only failures reported from the Kindle:
 --
--- The device run reported "登录界面不可用": `ui/widget/centercontainer` used to
--- be a top-level widget and was moved to `ui/widget/container/`.  A unit test
--- cannot require KOReader modules, so the cheapest guard is checking the source
--- for known-moved paths.  harness/require_check.lua covers the real load, but
--- only when someone runs it against a KOReader tree.
+--   * "登录界面不可用" -- a require of a widget that no longer exists in this
+--     KOReader release (`ui/widget/centercontainer` moved under `container/`);
+--   * "tapping the account field shows no keyboard, then the device restarts" --
+--     a hand-built dialog with a bare InputText never gets the focus/keyboard
+--     handling that KOReader's own InputDialog provides.
+--
+-- Neither can be exercised by the bare-LuaJIT suite, so the source is checked.
 
 local Helpers = require("helpers")
 
 return {
-    ["login uses the container/centercontainer path"] = function()
+    ["login uses KOReader's InputDialog, not a hand-built text field"] = function()
         local source = Helpers.read("ui/login.lua")
+        assert(source:find('require("ui/widget/inputdialog")', 1, true),
+            "login no longer uses InputDialog; the keyboard path is unverified")
+        assert(not source:find('require("ui/widget/inputtext")', 1, true),
+            "login requires InputText directly again (device keyboard/reboot bug)")
         assert(not source:find('require("ui/widget/centercontainer")', 1, true),
-            "the old ui/widget/centercontainer path is back (missing in v2026.07)")
-        assert(source:find('require("ui/widget/container/centercontainer")', 1, true),
-            "login no longer requires the centring container it needs")
+            "the removed ui/widget/centercontainer path is back")
     end,
 
-    ["the login dialog is opaque"] = function()
+    ["the password step asks for masking"] = function()
         local source = Helpers.read("ui/login.lua")
-        assert(source:find("background = Blitbuffer.COLOR_WHITE", 1, true),
-            "the dialog frame lost its paper background; the card shows through")
+        assert(source:find('text_type = "password"', 1, true),
+            "the password dialog would echo the password on screen")
+    end,
+
+    ["the keyboard is opened when a step appears"] = function()
+        local source = Helpers.read("ui/login.lua")
+        assert(source:find("onShowKeyboard", 1, true),
+            "the dialog no longer opens the keyboard; Voyage users would have to find the field")
     end,
 }

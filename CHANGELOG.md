@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.3] — 2026-10-30
+
+### Fixed
+
+- **Kindle 上点登录输入框不弹软键盘、随即系统软重启**：登录页不再自绘
+  `InputText`（它拿不到 KOReader 对话框的焦点/键盘路径），改为 KOReader 原生
+  `InputDialog` 两步流程：邮箱 → 密码。键盘由 `InputDialog:onShowKeyboard()`
+  打开，和 Wi-Fi 密码框走同一条路。
+- 密码步骤用 `text_type = "password"`（v2026.07 的 InputDialog 会透传给
+  InputText，`inputdialog.lua:381`），仍保持掩码。
+- `tests/test_module_paths.lua` 相应改为锁住三件事：必须用 InputDialog、不得再
+  require `InputText`/`centercontainer`、密码步骤必须带 `text_type` 且弹键盘。
+- `harness/ui_shot.lua` 增加两步登录的真实渲染与提交验证（含密码掩码断言）。
+
 ## [0.2.2] — 2026-10-30
 
 ### Fixed

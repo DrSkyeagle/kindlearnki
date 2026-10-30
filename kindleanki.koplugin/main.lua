@@ -356,14 +356,14 @@ function KindleAnki:prompt_login(then_sync)
         show_message("登录界面不可用：" .. tostring(Login))
         return
     end
-    Login:new{
+    local started, err = pcall(Login.start, {
         on_submit = function(email, password)
             local done = self:busy(_("正在登录 AnkiWeb…"))
             local client = self:build_client()
-            local hkey, err = client:host_key(email, password)
+            local hkey, login_error = client:host_key(email, password)
             done()
             if not hkey then
-                show_message(_("登录失败：") .. tostring(err))
+                show_message(_("登录失败：") .. tostring(login_error))
                 return
             end
             self:save_setting("hkey", hkey)
@@ -372,7 +372,11 @@ function KindleAnki:prompt_login(then_sync)
                 self:run_sync()
             end
         end,
-    }:show()
+    })
+    if not started then
+        Log.err("cannot start login dialog:", err)
+        show_message(_("无法打开登录界面，详情见 crash.log。"))
+    end
 end
 
 --- Ask which side wins when the schema differs.

@@ -197,21 +197,32 @@ long_study:onPageBackward()
 logger.info("kindleanki-shot page-backward page=" .. tostring(long_study.body_page))
 assert(long_study.body_page == 1, "backward paging did not return to page 1")
 
--- 4. login screen: reached from the sync action when no host key exists.  A
--- missing widget require used to make it unavailable on the device, so both
--- "does it render" and "does it hand the credentials over" are checked here.
+-- 4. login: now KOReader's own InputDialog (two steps), because a hand-built
+-- InputText never received taps/keyboard on the device.  Check that the first
+-- dialog appears with the keyboard, that "下一步" leads to the masked password
+-- step, and that submitting hands the credentials over.
 local Login = require("ui.login")
 local submitted = nil
-local login = Login:new{
+local email_dialog = Login.start{
     on_submit = function(email, password)
         submitted = { email = email, password = password }
     end,
 }
-login:show()
-shot("06-login")
-login.email_input:setText("tester@example.com")
-login.password_input:setText("secret123")
-login:submit()
+shot("06-login-email")
+assert(email_dialog and email_dialog.getInputText, "email dialog was not created")
+
+email_dialog._input_widget:setText("tester@example.com")
+email_dialog.buttons[1][2].callback() -- 下一步
+
+local password_dialog = UIManager:getTopmostVisibleWidget()
+assert(password_dialog and password_dialog.getInputText,
+    "password dialog did not replace the email dialog")
+assert(password_dialog.text_type == "password",
+    "password dialog is not masked")
+shot("07-login-password")
+
+password_dialog._input_widget:setText("secret123")
+password_dialog.buttons[1][2].callback() -- 登录
 assert(submitted and submitted.email == "tester@example.com",
     "login did not pass the email through")
 assert(submitted.password == "secret123", "login did not pass the password through")
