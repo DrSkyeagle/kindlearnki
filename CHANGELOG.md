@@ -418,3 +418,35 @@
 ## [0.1.0-dev] — 2026-10-28
 
 M0 骨架：插件加载、能力探测、13 条离线测试、协议/调度规范初稿、对拍工具。
+
+---
+
+## 真机同步验收（2026-10-31，AnkiWeb 实测）
+
+Kindle Voyage（真机）在 KOReader 里执行一次同步，`crash.log` 记录的完整链路：
+
+```
+sync: sync local_mod=1793381084000 server_mod=1793381399778 usn=254/256
+sync: applyChanges structural models=0 decks=2/0 tags=0
+sync: adopt server collection (...): pending cards=3 notes=0 revlog=3
+sync: replayed cards=3 notes=0 revlog=3
+sync: pull chunks=0
+sync: push pending cards=3 notes=0 revlog=3 graves=0
+sync: push chunk=1 cards=3 notes=0 revlog=3 done=false
+sync: finished server_mod=1793385699056 local_usn_now=258
+sync: no changes local_mod=1793385699056 server_mod=1793385699056 usn=258/258   # 第二次
+```
+
+即：手机的牌组结构变更被自动接管（没有弹"需要整库同步"），本地 3 条复习连同
+3 条 revlog 在接管后仍被推到 AnkiWeb，`sanityCheck2` 通过、`finish` 成功；紧接着
+第二次同步是 `noChanges`，来回踢皮球的问题消失。
+
+随后用 `harness/device_sync_evidence.lua` 在设备上重新下载服务器整库比对：
+
+```
+server:cards=1982,notes=1940,revlog=1588,decks=55,usn=259
+local :cards=1982,notes=1940,revlog=1588,decks=55,usn=258
+equal_rows=true
+```
+
+revlog 从 1585 涨到 1588，正是这次推送的 3 条复习——数据确实落到 AnkiWeb 上了。
