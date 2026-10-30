@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import subprocess
 import re
 import sys
 import zipfile
@@ -46,7 +47,39 @@ def iter_files():
         yield path, relative
 
 
+LUA_SYNTAX_CHECK = """
+local bad = 0
+for i = 1, #arg do
+    local chunk, err = loadfile(arg[i])
+    if not chunk then
+        bad = bad + 1
+        print("FAIL " .. arg[i] .. ": " .. tostring(err))
+    end
+end
+os.exit(bad == 0 and 0 or 1)
+"""
+
+
+def syntax_check() -> int:
+    """Compile every packaged Lua file before writing the archive.
+
+    A syntax error in a module that no offline test loads shipped once, and the
+    device only found it when the menu item required the module.  The bundled
+    LuaJIT is right here, so there is no excuse for a zip that does not compile.
+    """
+    luajit = ROOT / "tools" / "lj" / "luajit.exe"
+    if not luajit.exists():
+        print("syntax check skipped (bundled luajit not found)")
+        return 0
+    files = [str(path) for path, _ in iter_files()]
+    result = subprocess.run([str(luajit), "-e", LUA_SYNTAX_CHECK, *files])
+    return result.returncode
+
+
 def build(target: Path) -> int:
+    if syntax_check() != 0:
+        print("REFUSING to package: syntax errors above")
+        return 1
     target.parent.mkdir(parents=True, exist_ok=True)
     count = 0
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:

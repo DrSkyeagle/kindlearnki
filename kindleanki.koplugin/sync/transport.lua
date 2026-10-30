@@ -35,14 +35,8 @@ function Transport.default_cafile()
 end
 
 local function apply_timeouts(seconds)
-    local ok_socket, socket = pcall(require, "socket")
-    if ok_socket and socket then
-        pcall(function()
-            socket.core
-        end)
-    end
-    -- KOReader's socketutil sets both the connect timeout and the per-block
-    -- timeout; LuaSocket's own TIMEOUT only covers the latter.
+    -- KOReader's socketutil sets the connect timeout, the per-block timeout and
+    -- a total budget; LuaSocket's own TIMEOUT only covers the per-block one.
     pcall(function()
         local socketutil = require("socketutil")
         socketutil:set_timeout(seconds, seconds, seconds * 2)

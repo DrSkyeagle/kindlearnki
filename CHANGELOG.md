@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.5] — 2026-10-30
+
+### Fixed
+
+- **`sync/transport.lua` 语法错误**（上一版引入）：`apply_timeouts` 里留了一句裸表达式
+  `socket.core`，Lua 不允许裸表达式作语句，导致模块无法加载 —— 设备上表现为
+  “网络诊断不可用：'=' expected near 'end'”，登录也走不到 TLS。已删除。
+
+### Added
+
+- **`tests/test_syntax.lua`**：编译插件目录下每一个 `.lua`（`loadfile`，不执行），
+  任何语法错误都会让 L1 套件变红。
+- **`tools/pack_plugin.py` 语法闸门**：打包前用自带 LuaJIT 编译所有待入包文件，
+  有错直接拒绝打包。上一版能带着语法错误发出去，就是因为缺这道闸。
+
 ## [0.2.4] — 2026-10-30
 
 ### Added
