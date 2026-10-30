@@ -22,6 +22,7 @@ local _ = require("gettext")
 local Version = require("core.version")
 local Log = require("core.log")
 local Paths = require("core.paths")
+local Trace = require("core.trace")
 local Capabilities = require("core.capabilities")
 local Probe = require("ui.probe")
 
@@ -102,6 +103,13 @@ function KindleAnki:init()
             ca_path = self.paths.ca_bundle,
         }
         Log.info(self.caps.summary)
+        -- If the previous run died in a native call, its log tail may have been
+        -- lost; the breadcrumb file always survives.
+        Trace.init(self.paths.root)
+        local previous = Trace.last()
+        if previous then
+            Log.warn("previous run stopped at:", previous)
+        end
         if not self.caps.ok then
             Log.err("host is missing capabilities:", table.concat(self.caps.missing, ","))
         end
@@ -371,6 +379,7 @@ function KindleAnki:prompt_login(then_sync)
             and any native crash in the TLS stack must happen *after* the UI has
             settled so the last line in crash.log still tells us which stage
             ran. ]]
+            Trace.mark("login.submit")
             UIManager:scheduleIn(0.3, function()
                 -- Free everything the closed dialogs/keyboard left behind
                 -- before a TLS handshake on a 512 MB device.
@@ -380,9 +389,11 @@ function KindleAnki:prompt_login(then_sync)
                     collectgarbage("count") / 1024))
                 local finished, failure = xpcall(function()
                     Log.info("login: host_key begin")
+                    Trace.mark("login.request.start")
                     local done = self:busy(_("正在登录 AnkiWeb…"))
                     local client = self:build_client()
                     local hkey, login_error = client:host_key(email, password)
+                    Trace.mark("login.request.done")
                     done()
                     Log.info(string.format("login: memory after request %.1f MB",
                         collectgarbage("count") / 1024))
@@ -424,8 +435,10 @@ function KindleAnki:network_selftest()
 
     collectgarbage("collect")
     Log.info(string.format("selftest: memory %.1f MB", collectgarbage("count") / 1024))
+    Trace.mark("selftest.start")
     local done = self:busy(_("正在测试网络…"))
     local steps = Transport.selftest("sync.ankiweb.net")
+    Trace.mark("selftest.done")
     done()
 
     local lines = { _("网络诊断结果：") }

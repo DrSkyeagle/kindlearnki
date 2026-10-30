@@ -37,6 +37,7 @@ local default_modules = {
     "core.log",
     "core.paths",
     "core.capabilities",
+    "core.trace",
     "proto.pb",
     "proto.encode",
     "db.conn",

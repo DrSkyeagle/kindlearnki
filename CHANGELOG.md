@@ -9,6 +9,10 @@
   下，键盘 + 卡片文档 + 握手同时存在的内存峰值是可测的了。
 - `harness/network_check.lua`：在真实 KOReader 运行时里跑同一套 `socket/ssl`
   与 CA，再发一次真实 POST。本机结果：握手成功，AnkiWeb 返回 400（请求到达服务器）。
+- **崩溃面包屑**（`core/trace.lua`）：在 `login.submit` / `login.request.start` /
+  `login.request.done` / `selftest.*` 各写一行 `last-stage.txt` 并立即 close。
+  原生崩溃会丢掉日志缓冲，但这个文件一定落盘；下次启动时插件会把上次的最后阶段
+  以 `previous run stopped at: …` 写进 crash.log。
 
 ## [0.2.5] — 2026-10-30
 
