@@ -319,8 +319,8 @@ function Client:_request(method, body, opts)
             local location = header_value(response_headers, "location")
             if type(location) ~= "string" or location == "" then
                 return nil, string.format(
-                    "服务器要求跳转（HTTP %d）但没有给出 Location 地址，"
-                        .. "请稍后重试。", status)
+                    "同步主机校验失败（HTTP %d）：服务器未给出跳转地址，"
+                        .. "请重试一次；反复出现请重新登录。", status)
             end
             local new_base, next_url = redirect_target(location, url,
                 self.endpoint, method)
@@ -336,6 +336,24 @@ function Client:_request(method, body, opts)
             return nil, status_error(status, response_body)
         end
     end
+end
+
+--- Learn which sync host this account is assigned to.
+--
+-- AnkiWeb answers `/sync/meta` with a 308 whose Location points at
+-- `sync{N}.ankiweb.net`; every other endpoint answers 303 with the body "303"
+-- and **no Location** when asked on the wrong host.  A first full download has
+-- no earlier request to learn the host from, so it must call this first.
+function Client:resolve_host()
+    if self.host_resolved then
+        return true
+    end
+    local meta, err = self:meta()
+    if meta == nil then
+        return nil, err
+    end
+    self.host_resolved = true
+    return true
 end
 
 --- Compress a JSON request body and POST it.

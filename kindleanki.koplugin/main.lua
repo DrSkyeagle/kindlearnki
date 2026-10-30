@@ -573,9 +573,18 @@ function KindleAnki:full_sync(direction)
             self.collection = nil
             collection = nil
         end
+        local client = self:build_client()
+        if direction == "download" then
+            -- AnkiWeb assigns the account to sync{N}; discovering it needs one
+            -- /sync/meta call, which the download path would otherwise skip.
+            local host_ok, host_err = client:resolve_host()
+            if not host_ok then
+                error(host_err, 0)
+            end
+        end
         local runner = Runner.new{
             collection = collection,
-            client = self:build_client(),
+            client = client,
             paths = self.paths,
         }
         if direction == "download" then

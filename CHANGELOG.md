@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.2.10] — 2026-10-30
+
+### Fixed
+
+- **整库同步仍然 303**：这次是“没先问主机”。用设备上的 hkey 复现实测：
+  - `POST https://sync.ankiweb.net/sync/meta` → **308** `location: https://sync10.ankiweb.net/`
+  - `POST https://sync.ankiweb.net/sync/download` → **303**，**无 Location**，body 就是字面量 `303`
+  - 在 `sync10` 上发**完全相同**的请求 → **HTTP/2 200**，3.1 MB zstd 数据
+  
+  即：303 是“主机不对”的信号，而分配的主机只能从 `/sync/meta` 的 308 得知。
+  整库下载分支此前直接下载、跳过 meta；现在先 `client:resolve_host()`（内部调用 meta），
+  再下载。普通同步本来第一步就是 meta，因此只有首次整库下载受影响。
+
+### Added
+
+- `tests/test_client.lua`：`resolve_host` 的 308 跟随、下载落到分配主机、meta 失败即中止。
+
 ## [0.2.9] — 2026-10-30
 
 ### Fixed

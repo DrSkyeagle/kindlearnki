@@ -457,7 +457,7 @@ return {
         }
         local meta, err = no_location:meta()
         assert(meta == nil)
-        assert(type(err) == "string" and err:find("Location", 1, true), err)
+        assert(type(err) == "string" and err:find("同步主机", 1, true), err)
 
         local loop_responses = {}
         for index = 1, 4 do
@@ -668,6 +668,45 @@ return {
         local meta, err = client:meta()
         assert(meta == nil)
         assert(type(err) == "string" and err:find("303", 1, true), err)
-        assert(err:find("Location", 1, true), err)
+        assert(err:find("同步主机", 1, true), err)
+    end,
+
+    ["resolve_host follows the 308 so a first download hits the right host"] = function()
+        if not ZSTD_OK then
+            return
+        end
+        local payload = zstd.compress("SQLite format 3 " .. string.rep("x", 64))
+        local transport = scripted({
+            -- /sync/meta on the default host
+            { status = 308, headers = { location = "https://sync10.ankiweb.net/" } },
+            -- /sync/meta on the assigned host
+            { body = fixture("ankiweb_meta_resp.zst") },
+            -- /sync/download on the assigned host
+            { body = payload },
+        })
+        local client = Client.new{ transport = transport }
+        local ok, err = client:resolve_host()
+        assert(ok, err)
+        assert(client.endpoint == "https://sync10.ankiweb.net/", client.endpoint)
+        assert(request_at(transport, 2).url
+            == "https://sync10.ankiweb.net/sync/meta")
+
+        local bytes, download_err = client:download()
+        assert(bytes, download_err)
+        assert(bytes:sub(1, 15) == "SQLite format 3", bytes:sub(1, 15))
+        assert(request_at(transport, 3).url
+            == "https://sync10.ankiweb.net/sync/download")
+    end,
+
+    ["resolve_host reports a failed meta instead of downloading anyway"] = function()
+        if not ZSTD_OK then
+            return
+        end
+        local client = Client.new{
+            transport = scripted({ { status = 403, body = "nope" } }),
+        }
+        local ok, err = client:resolve_host()
+        assert(ok == nil)
+        assert(type(err) == "string" and err:find("403", 1, true), err)
     end,
 }
