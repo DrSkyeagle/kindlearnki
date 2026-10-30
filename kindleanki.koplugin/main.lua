@@ -16,6 +16,11 @@ there is no menu entry".  Therefore nothing in `init()` is allowed to throw.
 ]]
 
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
+-- Required here, not looked up as a global: KOReader does not put UIManager in
+-- _G, so `UIManager:show(...)` in this file used to crash every menu action
+-- that showed a banner (the device log read "attempt to index global
+-- 'UIManager' (a nil value)").
+local UIManager = require("ui/uimanager")
 local logger = require("logger")
 local _ = require("gettext")
 

@@ -10,7 +10,7 @@
 
 return {
     PRODUCT = "Kindle Anki",
-    VERSION = "0.2.6",
+    VERSION = "0.2.7",
     MIN_KOREADER = { 2026, 7, 1 },
 }
 

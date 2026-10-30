@@ -43,7 +43,20 @@ instance:init()
 assert(menu_items.kindleanki, "tools-tab menu entry missing")
 assert(menu_items.kindleanki_main, "main-tab menu entry missing")
 assert(type(menu_items.kindleanki.sub_item_table) == "table", "submenu missing")
-assert(#menu_items.kindleanki.sub_item_table == 4, "expected 4 submenu items")
+local labels = {}
+for _, item in ipairs(menu_items.kindleanki.sub_item_table) do
+    labels[#labels + 1] = item.text
+end
+assert(#labels >= 4, "expected at least 4 submenu items, got " .. #labels)
+for _, expected in ipairs({ "开始复习", "立即同步", "诊断", "网络诊断" }) do
+    local found = false
+    for _, label in ipairs(labels) do
+        if label:find(expected, 1, true) then
+            found = true
+        end
+    end
+    assert(found, "submenu is missing the entry: " .. expected)
+end
 
 -- Every menu label must be a string; calling text_func is what KOReader does.
 for index, item in ipairs(menu_items.kindleanki.sub_item_table) do

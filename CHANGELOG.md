@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.2.7] — 2026-10-30
+
+### Fixed
+
+- **`main.lua` 把 `UIManager` 当全局用**：文件里 13 处 `UIManager:…` 却从未
+  `require`，而 KOReader 不提供 `_G.UIManager`。设备日志（USB 读取）实证：
+  ```
+  main.lua:345: attempt to index global 'UIManager' (a nil value)
+    in function 'busy'      ← network_selftest → busy → InfoMessage
+    in function 'network_selftest'
+  ```
+  KOReader 抛错退出、KUAL 把框架拉起，看起来就是“重启”。已在文件头补
+  `local UIManager = require("ui/uimanager")`。
+
+### Added
+
+- **`tests/test_globals.lua`**：静态检查每个模块用到的 KOReader 全局
+  （UIManager/InfoMessage/ButtonDialog/InputDialog/Font/Screen/Device/…）是否
+  有对应 require 或 local 声明；并自带“确实能抓到缺失 require”的自测。
+- **`harness/smoke_main.lua`**：按 KOReader 的方式加载并实例化插件，然后**真的调用
+  `network_selftest`**（InfoMessage + UIManager + 真实 TLS）。静态检查看不到
+  “方法运行到一半才炸”的错误，这个 harness 能看到。
+- `harness/load_plugin.lua`：不再写死子菜单数量，改为断言关键条目都在。
+
 ## [0.2.6] — 2026-10-30
 
 ### Changed
