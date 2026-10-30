@@ -226,6 +226,34 @@ return {
         assert(ok, err)
     end,
 
+    ["before_upload stamps scm into ls so the upload is self-consistent"] = function()
+        if not FIXTURE then
+            return
+        end
+        local path = copy_fixture()
+        local collection = Collection.open(path)
+        local ok, err = pcall(function()
+            collection.conn:run("update cards set usn = -1 where id = (select id from cards limit 1)")
+            local usn_before = tonumber(collection.usn) or 0
+            Store.before_upload(collection)
+            local row = collection.conn:first("select scm, ls, usn from col")
+            assert(row, "no col row")
+            assert(row[1] == row[2],
+                string.format("ls=%s is not scm=%s", tostring(row[2]), tostring(row[1])))
+            assert(tonumber(row[3]) == usn_before + 1,
+                string.format("usn %s was not incremented from %s",
+                    tostring(row[3]), tostring(usn_before)))
+            local pending = collection.conn:first(
+                "select count(*) from cards where usn = -1")
+            assert(tonumber(pending[1]) == 0, "pending cards survived before_upload")
+            assert(collection.schema_modified == row[1],
+                "in-memory scm was not refreshed")
+        end)
+        collection:close()
+        cleanup(path)
+        assert(ok, err)
+    end,
+
     ["before_upload repairs blobs before the file leaves the device"] = function()
         if not FIXTURE then
             return

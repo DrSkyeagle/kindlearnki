@@ -368,6 +368,13 @@ function Runner:full_download()
         os.remove(raw)
         return nil, "无法写入新库"
     end
+    -- A WAL left over from the old file must never be replayed against the new
+    -- one: SQLite would apply the previous journal to a different database.
+    -- Closing the collection above normally removes these, but a crash or a
+    -- killed process can leave them behind.
+    for _, suffix in ipairs({ "-wal", "-shm" }) do
+        os.remove(target .. suffix)
+    end
     if self.collection then
         self.collection:reload()
     end
