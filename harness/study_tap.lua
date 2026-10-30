@@ -138,6 +138,30 @@ for round = 1, 3 do
     print("CYCLE state after rate answer=" .. tostring(view.show_answer))
     UIManager:forceRePaint()
 end
+-- Drain the queue: the last rating must close the study screen instead of
+-- leaving a dead "第 4 / 4 张" page with non-working buttons.
+do
+    local rounds = 0
+    while rounds < 12 do
+        local top_view = UIManager:getTopmostVisibleWidget()
+        if not top_view or top_view.name ~= "kindleanki_studyview" then
+            break
+        end
+        top_view:_rate(3)
+        UIManager:forceRePaint()
+        rounds = rounds + 1
+    end
+    local last = UIManager:getTopmostVisibleWidget()
+    local stack = {}
+    for index, widget in ipairs(UIManager._window_stack or {}) do
+        stack[index] = tostring(widget.name or widget.id or widget.title or tostring(widget))
+    end
+    print(string.format("DRAIN rounds=%d top=%s stack=%s", rounds,
+        tostring(last and (last.name or last.id or tostring(last)) or "none"),
+        table.concat(stack, ",")))
+    assert(not last or last.name ~= "kindleanki_studyview",
+        "study screen stayed open after the queue drained")
+end
 print("CYCLE-DONE")
 print("STUDY-TAP-OK")
 os.exit(0)

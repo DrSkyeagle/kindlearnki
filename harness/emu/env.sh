@@ -127,6 +127,25 @@ stop_framework() {
     # is killed/slow; it is also what makes the /proc/keypad write unnecessary.
     # `[c]vm`: a plain `pkill -f cvm` matches the ssh wrapper shell carrying the
     # pattern itself in its command line and kills its own session (ssh rc 255).
+    #
+    # Stopping it once is not enough: init starts the Java framework around 46 s
+    # into the boot (after our first stop), it finishes near 118 s, repaints the
+    # Kindle Home over KOReader and takes the 130 MB back.  Keep stopping it
+    # until the boot has settled and cvm stays gone.
+    local waited=0
+    while [ "$waited" -lt 180 ]; do
+        local uptime
+        uptime=$(guest_ssh_q 'cut -d. -f1 /proc/uptime 2>/dev/null' 2>/dev/null || echo 0)
+        if guest_ssh_q 'pgrep -f "[c]vm" >/dev/null 2>&1' 2>/dev/null; then
+            guest_ssh 'stop lab126_gui >/dev/null 2>&1
+                pkill -f "[c]vm" >/dev/null 2>&1
+                true' 2>/dev/null || true
+        elif [ "${uptime:-0}" -gt 130 ] 2>/dev/null; then
+            break
+        fi
+        sleep 5
+        waited=$((waited + 5))
+    done
     guest_ssh 'stop lab126_gui >/dev/null 2>&1
         pkill -f "[c]vm" >/dev/null 2>&1
         true'

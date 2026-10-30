@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.2.20] — 2026-10-31
+
+真机固件（QEMU 里的 Kindle Voyage 5.13.6 + KOReader 2026.07.1）验收时发现的两处
+调用点问题，以及模拟器脚本的时序修复。
+
+### Fixed
+
+- **牌组页的"同步"按钮绕过了登录检查**：它直接调 `run_sync()`，没登录时照样
+  向 AnkiWeb POST，拿到 HTTP 400，再把"客户端版本可能过旧，请更新插件"这种误导
+  信息甩给用户。现在走 `onKindleAnkiSync()`，未登录先弹登录框。
+- **刷完最后一张后停在死界面**：卡片看完后画面还留在最后一张，标题继续显示
+  `第 4 / 4 张`，底部还有"显示答案"和间隔为空的评分按钮，按哪个都没反应。
+  现在 `controller.on_rate` 发现队列空了就关闭复习页并提示"本轮完成：共 N 张"。
+
+### Emulator harness
+
+- `harness/emu/env.sh` 的 `stop_framework()` 会反复停 `lab126_gui`：Kindle 的 Java
+  框架在开机约 46s 才启动（我们第一次停太早），118s 起来后会把 Kindle Home 画在
+  KOReader 上并吃掉 130MB，之前的截图会随机变成 Home 或被覆盖。
+
+### Tests
+
+- `tests/test_ui_guards.lua`：把这两处调用点钉住（同步按钮必须走
+  `onKindleAnkiSync`；队列结束必须关闭复习页并给出提示）。
+
 ## [0.2.19] — 2026-10-31
 
 同步修复：Kindle 的复习进度传不到手机，以及手机一同步 Kindle 就被要求整库同步。

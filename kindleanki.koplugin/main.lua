@@ -303,9 +303,12 @@ function KindleAnki:onKindleAnkiStudy()
         local Controller = require("study.controller")
         return Controller.show_decks(collection, {
             -- The deck screen has its own 同步 button; without this callback it
-            -- was a dead zone that swallowed the tap.
+            -- was a dead zone that swallowed the tap.  Route it through the
+            -- hkey-guarded entry point: calling run_sync() directly POSTs to
+            -- AnkiWeb without a host key, the server answers 400, and the user
+            -- is told to reinstall the plugin when they simply are not logged in.
             on_sync = function()
-                self:run_sync()
+                self:onKindleAnkiSync()
             end,
         })
     end, debug.traceback)

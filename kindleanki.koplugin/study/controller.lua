@@ -136,6 +136,26 @@ function Controller.start_study(collection, deck_id, parent_view)
     -- the generic "复习" even though the session knows where it is.
     local deck_label = session:deck_name()
 
+    --- End of the queue: leave the card screen and say so.
+    --
+    -- Keeping it open showed "第 4 / 4 张" with a still-visible 显示答案 bar and
+    -- rating buttons whose intervals were empty -- every button a dead end.
+    local function finish_round()
+        local progress = session:progress()
+        Controller.close(view)
+        -- Slash form on purpose: requiring "ui.uimanager" (dots) loads a
+        -- SECOND copy of the module, with its own window stack, so the message
+        -- would never appear on the real UI.
+        local UIManager = load_ui("ui/uimanager")
+        local InfoMessage = load_ui("ui/widget/infomessage")
+        if UIManager and InfoMessage then
+            UIManager:show(InfoMessage:new{
+                text = string.format(_("本轮完成：共 %d 张"), progress.done or 0),
+                timeout = 3,
+            })
+        end
+    end
+
     view = StudyView:new{
         face = face,
         show_answer = false,
@@ -157,6 +177,10 @@ function Controller.start_study(collection, deck_id, parent_view)
             end
             session:answer(rating)
             item = session:next()
+            if not item then
+                finish_round()
+                return
+            end
             face = current_face(item)
             if view then
                 view:update_face(face, false, session:progress(),
