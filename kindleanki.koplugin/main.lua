@@ -567,17 +567,16 @@ function KindleAnki:full_sync(direction)
         -- file next to the target and renames it into place.  Opening an empty
         -- placeholder first fails ("collection has no col row") and, worse,
         -- leaves a schema-less file behind if the download is interrupted.
+        --
+        -- An existing collection is handed to the runner *without* being thrown
+        -- away: the runner closes it for the rename and reloads it in place, so
+        -- the deck list / study session keep a live object.  Replacing it with a
+        -- new one (the old behaviour) left those screens holding a closed
+        -- collection and the next tap died on `self.conn` being nil.
         local collection = self.collection
         if direction ~= "download" and not collection then
             collection = Model.open(self.paths.collection)
             self.collection = collection
-        end
-        if direction == "download" and collection then
-            -- The old file is about to be replaced; close it so the rename on
-            -- Kindle does not hit an open handle.
-            pcall(collection.close, collection)
-            self.collection = nil
-            collection = nil
         end
         local client = self:build_client()
         if direction == "download" then
@@ -602,7 +601,11 @@ function KindleAnki:full_sync(direction)
             if not downloaded then
                 error(download_error, 0)
             end
-            self.collection = Model.open(self.paths.collection)
+            -- The runner reloads an existing collection in place; only the very
+            -- first download needs a fresh object.
+            if not self.collection then
+                self.collection = Model.open(self.paths.collection)
+            end
         else
             local done = self:busy(_("正在上传整库…"))
             local uploaded, upload_error = runner:full_upload()

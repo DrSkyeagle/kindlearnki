@@ -266,6 +266,11 @@ end
 
 --- @treturn table|nil { id, guid, mid, mod, usn, tags, fields = {...}, sfld, csum }
 function Collection:note(nid)
+    if not self.conn then
+        -- A screen can outlive the connection (the file is replaced during a
+        -- full download); answer "not found" instead of crashing the UI.
+        return nil
+    end
     local row = self.conn:first(
         "select id, guid, mid, mod, usn, tags, flds, sfld, csum from notes where id = ?",
         nid)
@@ -299,6 +304,9 @@ Collection.CARD_COLUMNS =
     "id, nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, left, odue, odid, flags, data"
 
 function Collection:card(row)
+    if not self.conn then
+        return nil
+    end
     return {
         id = row[1],
         nid = row[2],
@@ -322,6 +330,9 @@ function Collection:card(row)
 end
 
 function Collection:card_by_id(card_id)
+    if not self.conn then
+        return nil
+    end
     local row = self.conn:first(string.format(
         "select %s from cards where id = ?", Collection.CARD_COLUMNS), card_id)
     if not row then
@@ -331,6 +342,9 @@ function Collection:card_by_id(card_id)
 end
 
 function Collection:cards_in_decks(deck_ids)
+    if not self.conn then
+        return {}
+    end
     local placeholders = {}
     for index = 1, #deck_ids do
         placeholders[index] = "?"
