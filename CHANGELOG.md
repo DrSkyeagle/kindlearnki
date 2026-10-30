@@ -1,5 +1,22 @@
 # Changelog
 
+## 模拟器 A 端到端同步（2026-10-31，arm 固件 + 真 KOReader）
+
+`harness/emu/emu_sync_mock.sh`：把 `harness/mock_ankiweb.py` 用 `ssh -R` 挂到
+模拟器的 loopback（该 QEMU 机器的网卡没有后端，10.0.2.2 不可达），让真实 Kindle
+固件里的插件对它做一次完整同步。`structural` 模式（服务端多出牌组）下的请求序列：
+
+```
+meta, start, applyChanges        -> 响应带 1 个牌组
+abort, download                  -> 接管云端库
+meta, start, applyChanges, chunk -> 已是最新结构
+applyChunk (244 B)               -> sync: push chunk=1 cards=6 notes=0 revlog=6
+sanityCheck2, finish             -> sync: finished local_usn_now=100
+```
+
+推送的 6 张卡与 6 条 revlog 的 usn 都是服务器当时的 usn（99），与 rslib 记账一致；
+模拟器里复习产生的 6 条待同步复习在接管之后被完整补推。
+
 ## [0.2.21] — 2026-10-31
 
 ### Fixed
