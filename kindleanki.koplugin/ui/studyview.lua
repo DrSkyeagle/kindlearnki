@@ -265,10 +265,25 @@ function StudyView:_load_html_body(html, css, resource_dir, key)
         -- Size the card from the screen, and drop the template's pinned
         -- `font-size` so that size actually applies.
         local body_px = Tokens.body_font_px(Screen:getWidth(), Screen:getHeight())
-        local card_css = Tokens.strip_backgrounds(Tokens.strip_font_size(css))
+        local card_css = Tokens.flush_margins_css() .. Tokens.strip_alignment(
+            Tokens.strip_backgrounds(Tokens.strip_font_size(css)))
             .. string.char(10)
             .. string.format(".card{font-size:%dpx;background-color:#fff;color:#000;margin:0;padding:0;text-align:left;}", body_px)
         body:setContent(html, card_css, body_px, nil, nil, resource_dir)
+        -- Native memory is the suspect for the device reboot after two cards;
+        -- leaving a breadcrumb in the log makes the next crash readable.
+        pcall(function()
+            local status = io.open("/proc/self/status", "r")
+            if status then
+                local text = status:read("*a") or ""
+                status:close()
+                local rss = text:match("VmRSS:%s*(%d+)%s*kB")
+                if rss then
+                    logger.info(string.format("kindleanki: card render rss=%.1f MB px=%d",
+                        tonumber(rss) / 1024, body_px))
+                end
+            end
+        end)
     end)
     if not ok then
         logger.warn("kindleanki: cannot render card HTML, using plain text:", err)

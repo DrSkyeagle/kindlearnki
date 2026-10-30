@@ -58,6 +58,22 @@ local function shot(name)
     print("shot:", path)
 end
 
+-- Measure where the content really sits: our box, and MuPDF's used bbox.
+do
+    local box = top.layout and top.layout.body
+    print(string.format("BOX x=%s y=%s w=%s h=%s", tostring(box and box.x),
+        tostring(box and box.y), tostring(box and box.w), tostring(box and box.h)))
+    local body = top.body
+    if body and body.document then
+        local page = body.document:openPage(1)
+        local x0, y0, x1, y1 = page:getUsedBBox()
+        page:close()
+        print(string.format("BBOX %s %s %s %s (page w=%s h=%s)",
+            tostring(x0), tostring(y0), tostring(x1), tostring(y1),
+            tostring(body.dimen and body.dimen.w), tostring(body.dimen and body.dimen.h)))
+    end
+end
+
 shot("10-study-from-deck")
 print("STUDY-TAP-OK")
 os.exit(0)

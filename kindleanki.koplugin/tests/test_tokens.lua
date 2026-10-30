@@ -225,7 +225,8 @@ return {
         assert(out:find("color:#333", 1, true), out)
     end,
 
-    ["Voyage lands on 64px"] = function()
-        assert(Tokens.body_font_px(1072, 1448) == 64, Tokens.body_font_px(1072, 1448))
+    ["Voyage font is large but leaves native headroom"] = function()
+        local px = Tokens.body_font_px(1072, 1448)
+        assert(px >= 48 and px <= 64, px)
     end,
 }

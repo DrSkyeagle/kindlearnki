@@ -276,7 +276,7 @@ function Tokens.body_font_px(width, height)
     height = tonumber(height) or 1448
     -- 6% of the panel width lands on 64 px for a 1072-wide Voyage panel and
     -- still scales down for the 708-wide emulator window.
-    local by_width = math.floor(width * 0.06)
+    local by_width = math.floor(width * 0.052)
     local by_height = math.floor(height / 22)
     local px = math.min(by_width, by_height)
     if px < 24 then
@@ -311,6 +311,21 @@ function Tokens.strip_backgrounds(css)
         return ""
     end)
     return css
+end
+
+--- Remove centring so the card starts at the panel's left edge.
+--
+-- MuPDF keeps applying the template's `.card { text-align: center }` even when
+-- the wrapper carries an inline left alignment, so the declaration is removed.
+function Tokens.strip_alignment(css)
+    return (tostring(css or ""):gsub("text%-align%s*:%s*[^;}]+;?", ""))
+end
+
+--- Kill the default block margins MuPDF adds (h1/h2/p/body), which produced a
+-- large blank band above the text.
+function Tokens.flush_margins_css()
+    return "body,h1,h2,h3,h4,h5,h6,p,ul,ol,li,blockquote,pre,div,table"
+        .. "{margin:0;padding:0;}"
 end
 
 function Tokens.strip_font_size(css)
