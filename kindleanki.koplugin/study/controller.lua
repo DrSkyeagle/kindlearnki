@@ -148,6 +148,12 @@ function Controller.start_study(collection, deck_id, parent_view)
         if not deck_view or type(deck_view.update) ~= "function" then
             return
         end
+        -- A sync may have the collection closed for a download right now; the
+        -- read paths answer empty in that state, and repainting the deck list
+        -- with "no decks" would look like data loss.
+        if not (collection and collection.conn) then
+            return
+        end
         local ok, data = pcall(DeckList.build, collection)
         if ok and data then
             deck_view:update(data.decks, data.total, data.date_text)
