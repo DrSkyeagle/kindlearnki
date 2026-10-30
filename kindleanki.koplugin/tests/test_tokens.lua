@@ -229,4 +229,32 @@ return {
         local px = Tokens.body_font_px(1072, 1448)
         assert(px >= 48 and px <= 64, px)
     end,
+
+    ["card font is typographic: MuPDF multiplies its page margin by it"] = function()
+        local voyage = Tokens.card_font_px(1072, 1448)
+        -- ~24 CJK glyphs per line after MuPDF's own 2em margin: the density the
+        -- reference reader (kindle-anki v0.2.0) renders.
+        assert(voyage >= 34 and voyage <= 44, "Voyage card font: " .. voyage)
+        assert(Tokens.card_font_px(708, 956) < voyage, "smaller screens get smaller text")
+        assert(Tokens.card_font_px(100, 100) == 22, "lower clamp")
+        assert(Tokens.card_font_px(5000, 5000) == 48, "upper clamp")
+    end,
+
+    ["strip_font_size removes the whole calc() declaration"] = function()
+        -- Cutting only the "2px" out of calc(1em - 2px) leaves a CSS syntax
+        -- error, and MuPDF drops every declaration after it.
+        local out = Tokens.strip_font_size(".code{font-size:calc(1em - 2px);color:#000}")
+        assert(not out:find("calc", 1, true), out)
+        assert(not out:find("font-size", 1, true), out)
+        assert(out:find("color:#000", 1, true), out)
+    end,
+
+    ["tidy_declarations removes the empty values MuPDF chokes on"] = function()
+        -- Deck stylesheets really do ship `color: ;` (the template author
+        -- deleted a colour and left the declaration behind).
+        local out = Tokens.tidy_declarations(
+            ".nightMode .underline { color: ; font-weight: normal; }")
+        assert(not out:find("color:", 1, true), out)
+        assert(out:find("font-weight: normal", 1, true), out)
+    end,
 }

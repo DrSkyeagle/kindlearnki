@@ -34,13 +34,27 @@ return {
     ["exiting does not rely on a key the Voyage lacks"] = function()
         local source = Helpers.read("ui/studyview.lua")
         -- Back is bound (harmless on devices that have it), but PgBack must not
-        -- be treated as "back": Voyage has no Back key and the × hot zone is the
-        -- documented exit.
+        -- be treated as "back": Voyage has no Back key, so the title-bar × is
+        -- the exit.  The × comes from TitleBar's close_callback.
         local pgback_as_close = source:find(
             'PageBackward = { { Input.group.PgBack }, event = "Close" }', 1, true)
         assert(pgback_as_close == nil, "PgBack is bound to Close")
-        assert(source:find("exit_hit", 1, true) or source:find("Tokens.size.exit", 1, true),
-            "the touch exit hot zone disappeared")
+        assert(source:find("close_callback", 1, true),
+            "the title-bar close button disappeared")
+        assert(source:find("TitleBar", 1, true),
+            "the study screen no longer has a title bar to close from")
+    end,
+
+    ["the card body is a scroll widget, not a hand-compensated box"] = function()
+        local source = Helpers.read("ui/studyview.lua")
+        -- The old screen measured MuPDF's page margin from the *previous* card
+        -- and shifted the body by it; fronts drifted or vanished.  A
+        -- ScrollHtmlWidget owns the text area instead, so that class of bug
+        -- cannot come back.
+        assert(source:find("ScrollHtmlWidget", 1, true),
+            "the card body is not a ScrollHtmlWidget")
+        assert(not source:find("body_shift", 1, true),
+            "the margin-compensation hack is back")
     end,
 }
 

@@ -34,13 +34,107 @@ local function ensure_loadlib()
     end
 end
 
+--==========================================================================
+-- BLOB binding
+--==========================================================================
+-- lua-ljsqlite3 has no `stmt:bind_blob`.  Its only BLOB channel is the tagged
+-- table built by `SQ3.blob(ptr, size)`, and that one requires `ptr` to come
+-- from libc malloc: after binding with SQLITE_TRANSIENT the library calls
+-- `free(v[1])` on it (see `sql_set_code` in common/lua-ljsqlite3/init.lua).
+-- KOReader's coverbrowser plugin does exactly that with a zstd-owned buffer.
+--
+-- We cannot use that path: the L1 test runner is a bare LuaJIT where `ffi.C`
+-- exposes no malloc/free at all (tests/run.lua even shims the library's
+-- `free = C.free` into a no-op so the module can load on Windows).  Allocating
+-- a buffer per counter update would also be wasteful for a ~40 byte protobuf.
+--
+-- So we call sqlite3_bind_blob directly (the cdef is registered by
+-- lua-ljsqlite3 when it is required; the library handle below is the same
+-- `ffi.loadlib("sqlite3", "0")` the module itself resolves):
+--
+--   * destructor argument is nil == SQLITE_STATIC: SQLite neither copies nor
+--     frees the buffer, it only reads it while stepping.  A Lua string is
+--     immutable and never moved by the GC, and the caller keeps a reference
+--     across the step, so the pointer stays valid.
+--   * Conn:statement() resets and clears bindings before reusing a statement;
+--     sqlite3_reset/finalize do not dereference STATIC pointers, so a later
+--     reuse can never read a stale one.
+
+local BLOB_MARKER = {} -- metatable identity for Conn.blob() wrappers
+
+--- Mark `bytes` so Conn:run/first/all bind it as a BLOB (not TEXT).
+-- Storage class matters: the schema declares decks.common, notetypes.config,
+-- deck_config.config, ... as BLOB, and Anki's rslib reads them as Vec<u8>.  A
+-- plain Lua string is bound as TEXT and makes the whole collection unreadable
+-- by Anki ("InvalidType").
+-- @tparam string bytes raw bytes
+-- @treturn table marker understood by the bind helpers below
+function Conn.blob(bytes)
+    return setmetatable({ bytes = tostring(bytes or "") }, BLOB_MARKER)
+end
+
+local function is_blob(value)
+    return type(value) == "table" and getmetatable(value) == BLOB_MARKER
+end
+
+local sqlite_lib
+
+local function sqlite_namespace()
+    if not sqlite_lib then
+        sqlite_lib = require("ffi").loadlib("sqlite3", "0")
+    end
+    return sqlite_lib
+end
+
+local function bind_blob(stmt, index, bytes)
+    local ffi = require("ffi")
+    local code = sqlite_namespace().sqlite3_bind_blob(stmt._ptr, index,
+        ffi.cast("const void *", bytes), #bytes, nil)
+    if code ~= 0 then
+        error(string.format("sqlite3_bind_blob(%d) failed (%d)", index, code), 0)
+    end
+end
+
+--- Bind a positional argument list, routing Conn.blob() markers to bind_blob.
+-- The no-marker fast path stays a single `stmt:bind(...)` call.
+local function bind_arguments(stmt, ...)
+    local count = select("#", ...)
+    if count == 0 then
+        return
+    end
+    local has_blob = false
+    for index = 1, count do
+        if is_blob((select(index, ...))) then
+            has_blob = true
+            break
+        end
+    end
+    if not has_blob then
+        stmt:bind(...)
+        return
+    end
+    for index = 1, count do
+        local value = select(index, ...)
+        if is_blob(value) then
+            bind_blob(stmt, index, value.bytes)
+        else
+            stmt:bind1(index, value)
+        end
+    end
+end
+
 local function copy_row(row)
     for i = 1, #row do
         local value = row[i]
-        if type(value) == "table" and value[1] ~= nil and value[2] ~= nil then
+        if type(value) == "table" and type(value[2]) == "number" then
             -- BLOB: valid only until the next step(), so copy now.
-            local ffi = require("ffi")
-            row[i] = ffi.string(value[1], value[2])
+            --
+            -- Test the size, not the pointer: SQLite returns a NULL pointer
+            -- for a zero-length BLOB and LuaJIT compares a NULL cdata pointer
+            -- equal to nil, so `value[1] ~= nil` silently left the {ptr, 0}
+            -- wrapper in place and PB.decode later choked on a table.
+            local bytes = value[1]
+            row[i] = bytes ~= nil and require("ffi").string(bytes, value[2]) or ""
         elseif type(value) == "cdata" then
             -- ljsqlite3 returns INTEGER columns as int64 cdata.  Every id and
             -- timestamp this plugin handles is below 2^53, and mixing cdata
@@ -99,9 +193,7 @@ end
 --- All rows as tables of positional columns.
 function Conn:all(sql, ...)
     local stmt = self:statement(sql)
-    if select("#", ...) > 0 then
-        stmt:bind(...)
-    end
+    bind_arguments(stmt, ...)
     local rows = {}
     for row in stmt:rows() do
         rows[#rows + 1] = copy_row(row)
@@ -111,9 +203,7 @@ end
 
 function Conn:first(sql, ...)
     local stmt = self:statement(sql)
-    if select("#", ...) > 0 then
-        stmt:bind(...)
-    end
+    bind_arguments(stmt, ...)
     local row = stmt:step()
     if not row then
         return nil
@@ -124,9 +214,7 @@ end
 --- Execute a statement that returns no rows (insert/update/delete).
 function Conn:run(sql, ...)
     local stmt = self:statement(sql)
-    if select("#", ...) > 0 then
-        stmt:bind(...)
-    end
+    bind_arguments(stmt, ...)
     local row = stmt:step()
     -- A row here means the SQL was a SELECT by mistake; consume nothing more.
     return row ~= nil

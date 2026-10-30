@@ -76,5 +76,8 @@ print("SMOKE fresh-directory data dir ok")
 -- The typo that broke tapping a deck lived in this helper; call it for real.
 local controller = require("study.controller")
 local style = controller.card_style()
-assert(style and style:find("font-size:", 1, true), "card_style is broken: " .. tostring(style))
+assert(style and style:find("text-align:left", 1, true),
+    "card_style is broken: " .. tostring(style))
+assert(not style:find("font-size:", 1, true),
+    "card_style pins a font size again (it multiplies MuPDF's page margin)")
 print("SMOKE card_style ok: " .. style)

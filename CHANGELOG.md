@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.2.17] — 2026-10-31
+
+分支 `kindle-ankiweb`：复习页改为参考实现
+[yizhixiaoheigou/kindle-anki v0.2.0](https://github.com/yizhixiaoheigou/kindle-anki/releases/tag/v0.2.0)
+的卡片版式——标题栏 + MuPDF 正文区 + 底部按钮表，正文由 MuPDF 自己排版、贴顶、
+超长分页。
+
+### Fixed
+
+- **部分卡片正面错位 / 完全不显示**：旧版在正文区手动画框，再用
+  `getUsedBBox()` 量 MuPDF 自带页边距去补偿，而补偿读的 `self.body_page_count`
+  要到函数末尾才更新——上一条若是多页答案，下一条短正面就带着旧值跳过补偿，
+  于是错位；残留的平移量又让内容看起来消失了。现在正文交给 `ScrollHtmlWidget`，
+  不再有任何手工平移，这类 bug 从结构上消失。
+- **背面正文到评分按钮之间空白过大**：正文不再垂直居中/上移，所有卡片都从正文区
+  顶部同一行开始，按钮固定在底部。
+- **卡片字号被模板钉死**：`strip_font_size()` 现在整条删掉绝对字号（含
+  `calc(1em - 2px)`），并把注释隔开的声明也覆盖到；旧正则只删掉 `px` 前面的数字，
+  留下 CSS 语法错误，MuPDF 会把后面的声明全部丢弃——这正是同一个牌组里字号忽大忽小的原因。
+- **空声明导致整段样式失效**：牌组 CSS 里真的有 `color: ;`（模板作者删了颜色留下声明），
+  MuPDF 遇到语法错误就停。新增 `Tokens.tidy_declarations()` 先清掉空值再交给渲染器。
+- `body` 内侧留白改由样式表控制（`@page { margin: 0 }` 关掉 MuPDF 自己的 2em/3em），
+  左右上下边距从此一致，不再随字号放大。
+
+### Changed
+
+- 卡片字号改用 `Tokens.card_font_px()`（Voyage 上 38px，约每行 24 个汉字），
+  与参考实现一致；牌组名移到标题栏，进度在正文第一行（`第 N / M 张`）。
+- 正面只剩一个通栏“显示答案”，退出用标题栏的 ×；背面是 2×2 评分按钮
+  （重来/困难/记住/太简单 + 下次间隔）。
+- `harness/study_tap.lua` 会挑一个真的有待学卡片的牌组，并连刷三张卡
+  （正面 → 显示答案 → 评分 → 下一张），逐步打印 `px/pages/bbox`；同时把交给
+  MuPDF 的 HTML/CSS 落到 `face-front.html` / `face.css` 供事后诊断。
+
+### Also in this branch
+
+- **BLOB 存储类**：`decks.common` 等列在 schema 里是 BLOB，之前用普通 Lua 字符串
+  绑定会被 SQLite 存成 TEXT，Anki 端读到会报 `InvalidType`。`Conn.blob()` 改走
+  `sqlite3_bind_blob`，上传前再 `repair_blob_storage()` 修一遍。
+- `out/golden.lua` 与新基准集合漂移导致的两条差分测试失败：`tools/diff/dump_queue.py`
+  可重新生成 golden 快照，`tests/test_sched_golden.lua` 改为按当前快照比较。
+
 ## [0.2.16] — 2026-10-31
 
 ### Fixed

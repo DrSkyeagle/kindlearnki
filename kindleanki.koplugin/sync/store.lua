@@ -212,6 +212,10 @@ end
 
 --- Prepare a collection for a full upload (Anki's `before_upload`).
 function Store.before_upload(collection)
+    -- The uploaded file is read by AnkiWeb/desktop Anki, whose rslib rejects
+    -- TEXT in BLOB columns.  Heal anything an older writer stored wrongly
+    -- before the file leaves this device.
+    collection:repair_blob_storage()
     local now_ms = math.floor(os.time() * 1000)
     collection.conn:transaction(function()
         collection.conn:run("delete from graves")
@@ -237,6 +241,11 @@ function Store.after_finish(collection, new_mod, server_usn)
     collection.ls = new_mod
     collection.modified = new_mod
     collection.usn = (server_usn or 0) + 1
+    -- A plain re-sync should also heal a collection an older writer left with
+    -- TEXT-typed BLOB columns (see model/collection.lua repair_blob_storage).
+    -- The sync itself has already succeeded, so a repair failure (e.g. a busy
+    -- file) must not be reported as a sync failure.
+    pcall(collection.repair_blob_storage, collection)
 end
 
 --- True when the two sides disagree on schema and only a full sync can help.

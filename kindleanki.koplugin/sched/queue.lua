@@ -11,6 +11,7 @@
 -- collections this targets use the defaults, and the differential test asserts
 -- the *set* and the per-card states, not the interleaving.
 
+local Conn = require("db.conn")
 local PB = require("proto.pb")
 local Encode = require("proto.encode")
 
@@ -211,9 +212,14 @@ function Queue.bump_studied(collection, deck_id, today, field)
 
     local blob = Encode.encode(common)
     deck.common_blob = blob
+    -- decks.common is declared BLOB by the schema and Anki's rslib reads it as
+    -- Vec<u8>.  A plain Lua string is bound as TEXT, which writes a row that
+    -- looks fine to us (our reader accepts both storage classes) but makes the
+    -- collection unreadable by Anki; Conn.blob() routes it through
+    -- sqlite3_bind_blob.
     collection.conn:run(
         "update decks set common = ?, mtime_secs = ?, usn = -1 where id = ?",
-        blob, os.time(), deck_id)
+        Conn.blob(blob), os.time(), deck_id)
 end
 
 return Queue

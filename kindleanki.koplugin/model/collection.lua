@@ -345,6 +345,86 @@ function Collection:cards_in_decks(deck_ids)
     return cards
 end
 
+--==========================================================================
+-- BLOB storage class repair
+--==========================================================================
+-- The schema declares these columns BLOB and Anki's rslib reads them as
+-- `Vec<u8>`.  A row whose storage class is TEXT keeps working for *this*
+-- reader (SQLite hands TEXT back as a Lua string, BLOB as {ptr, size}, and
+-- copy_row normalises both) but makes Anki refuse the whole collection with
+-- `InvalidType`.  Byte content is identical in both classes, so rewriting the
+-- row as a BLOB restores the invariants without touching the payload.
+--
+-- The legacy writer wrote decks.common as TEXT (see db/conn.lua Conn.blob);
+-- every other column below is covered as a safety net.  `fields`, `templates`
+-- and `config` are WITHOUT ROWID tables, hence the primary-key lookups.
+local BLOB_COLUMNS = {
+    { table = "decks", column = "common", key = { "id" } },
+    { table = "decks", column = "kind", key = { "id" } },
+    { table = "notetypes", column = "config", key = { "id" } },
+    { table = "deck_config", column = "config", key = { "id" } },
+    { table = "fields", column = "config", key = { "ntid", "ord" } },
+    { table = "templates", column = "config", key = { "ntid", "ord" } },
+    { table = "config", column = "val", key = { "KEY" } },
+}
+
+--- Count rows whose declared-BLOB column holds a non-BLOB storage class.
+-- @treturn table map of "table.column" -> row count; empty when the file is clean
+function Collection:blob_storage_issues()
+    local issues = {}
+    for _, spec in ipairs(BLOB_COLUMNS) do
+        local row = self.conn:first(string.format(
+            "select count(*) from %s where %s is not null and typeof(%s) <> 'blob'",
+            spec.table, spec.column, spec.column))
+        local count = tonumber(row and row[1]) or 0
+        if count > 0 then
+            issues[spec.table .. "." .. spec.column] = count
+        end
+    end
+    return issues
+end
+
+--- Rewrite TEXT-typed BLOB columns back to real BLOBs, in place.
+-- Safe to call repeatedly; does nothing (and opens no transaction) when clean.
+-- @treturn number rows repaired
+function Collection:repair_blob_storage()
+    if self.conn.read_only then
+        return 0
+    end
+    local issues = self:blob_storage_issues()
+    if not next(issues) then
+        return 0
+    end
+    local repaired = 0
+    self.conn:transaction(function()
+        for _, spec in ipairs(BLOB_COLUMNS) do
+            if issues[spec.table .. "." .. spec.column] then
+                local key_list = table.concat(spec.key, ", ")
+                local conditions = {}
+                for index, key in ipairs(spec.key) do
+                    conditions[index] = key .. " = ?"
+                end
+                local rows = self.conn:all(string.format(
+                    "select %s, %s from %s where %s is not null and typeof(%s) <> 'blob'",
+                    key_list, spec.column, spec.table, spec.column, spec.column))
+                for _, row in ipairs(rows) do
+                    -- SET value first, then the primary-key predicates.
+                    local arguments = { Conn.blob(row[#spec.key + 1]) }
+                    for index = 1, #spec.key do
+                        arguments[#arguments + 1] = row[index]
+                    end
+                    self.conn:run(string.format(
+                        "update %s set %s = ? where %s", spec.table,
+                        spec.column, table.concat(conditions, " and ")),
+                        unpack(arguments))
+                    repaired = repaired + 1
+                end
+            end
+        end
+    end)
+    return repaired
+end
+
 --- Re-open after the file on disk was replaced (full sync download).
 function Collection:reload()
     self:close()

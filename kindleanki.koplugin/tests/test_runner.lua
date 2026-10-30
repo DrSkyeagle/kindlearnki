@@ -272,6 +272,9 @@ return {
     end,
 
     ["full download works before a local collection exists"] = function()
+        if not FIXTURE then
+            return
+        end
         -- The device hit both halves of this: the data directory did not exist
         -- (`cantopen`) and the download branch used to open an empty placeholder
         -- (`collection has no col row`).  A first sync must do neither.

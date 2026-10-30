@@ -33,19 +33,14 @@ end
 
 --- Show the deck list.
 -- @tparam table opts { on_close = function() }
---- Inline style for the card body: 64 px-ish text, paper white, hard left.
+--- Inline style for the card body: paper white, black ink, hard left.
+--
+-- No `font-size` here on purpose.  The card is laid out by MuPDF through a
+-- ScrollHtmlWidget, whose base font size is `Tokens.card_font_px()`; a pinned
+-- px size would override that and, worse, multiply MuPDF's own 2em/3em page
+-- margin by the same factor (that is what pushed fronts out of their box).
 function Controller.card_style()
-    local width, height = 1072, 1448
-    local ok_device, Device = pcall(require, "device")
-    if ok_device and Device and Device.screen then
-        width = Device.screen:getWidth()
-        height = Device.screen:getHeight()
-    end
-    local Tokens = require("ui.tokens")
-    local px = Tokens.body_font_px(width, height)
-    return string.format(
-        "font-size:%dpx;background-color:#fff;color:#000;text-align:left;"
-            .. "margin:0;padding:0;width:100%%;display:block;", px)
+    return "background-color:#fff;color:#000;text-align:left;margin:0;padding:0;"
 end
 
 function Controller.show_decks(collection, opts)
@@ -137,12 +132,16 @@ function Controller.start_study(collection, deck_id, parent_view)
 
     local item = session:next()
     local face = current_face(item)
+    -- The title bar names the deck on every face; without this the bar shows
+    -- the generic "复习" even though the session knows where it is.
+    local deck_label = session:deck_name()
 
     view = StudyView:new{
         face = face,
         show_answer = false,
         progress = session:progress(),
         intervals = item and item.intervals or {},
+        deck_name = deck_label,
         on_show_answer = function()
             if not view then
                 return
@@ -150,7 +149,7 @@ function Controller.start_study(collection, deck_id, parent_view)
             view:update_face({
                 html = face.answer_html or face.html,
                 css = face.css,
-            }, true, session:progress(), item and item.intervals or {})
+            }, true, session:progress(), item and item.intervals or {}, deck_label)
         end,
         on_rate = function(rating)
             if not item then
@@ -161,7 +160,7 @@ function Controller.start_study(collection, deck_id, parent_view)
             face = current_face(item)
             if view then
                 view:update_face(face, false, session:progress(),
-                    item and item.intervals or {})
+                    item and item.intervals or {}, deck_label)
             end
         end,
         on_close = function()

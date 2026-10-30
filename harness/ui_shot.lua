@@ -88,24 +88,36 @@ local Session = require("study.session")
 local Render = require("render.template")
 local StudyView = require("ui.studyview")
 
+-- The active deck may be empty (earlier harness runs answer cards), so show a
+-- deck that actually has something due.  Screenshots of an empty screen prove
+-- nothing about card layout.
+local function deck_with_cards(decks)
+    for _, deck in ipairs(decks) do
+        local counts = deck.counts or {}
+        if (counts.new or 0) + (counts.learning or 0) + (counts.review or 0) > 0 then
+            return deck
+        end
+    end
+    return decks[1]
+end
+
+local study_deck = deck_with_cards(data.decks)
 local session = Session.new{
     collection = collection,
-    deck_id = collection:active_deck_id(),
+    deck_id = study_deck and study_deck.id or collection:active_deck_id(),
 }
 local item = session:next()
 assert(item, "no card to show")
 
 local faces = Render.card_faces(item.notetype, item.note, item.card, item.context)
 local css = faces.css or item.notetype.css or ""
+local Controller = require("study.controller")
 local function wrap(html)
     -- Same inline style the plugin's controller applies, so the screenshot shows
-    -- what the device will actually render.
-    local Tokens = require("ui.tokens")
-    local px = Tokens.body_font_px(Screen:getWidth(), Screen:getHeight())
-    return string.format(
-        '<div class="card card%s" style="font-size:%dpx;background-color:#fff;'
-            .. 'color:#000;text-align:left;margin:0;padding:0;">%s</div>',
-        tostring((item.card.ord or 0) + 1), px, html or "")
+    -- what the device will actually render.  No pinned font size: the study
+    -- screen owns the base size (Tokens.card_font_px) like the reference reader.
+    return string.format('<div class="card card%s" style="%s">%s</div>',
+        tostring((item.card.ord or 0) + 1), Controller.card_style(), html or "")
 end
 
 local study_view

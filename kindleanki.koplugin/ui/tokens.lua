@@ -124,6 +124,14 @@ Tokens.exit_text = "×"
 Tokens.empty_text = "没有到期的卡片"
 Tokens.all_decks_prefix = "全部牌组一起复习"
 
+-- 复习页的标题栏 / 正文元信息。 版式与参考实现
+-- (yizhixiaoheigou/kindle-anki v0.2.0) 一致：标题栏放牌组名，正文第一行放
+-- "第 N / M 张"，第二行放当前是正面还是背面。
+Tokens.study_title = "复习"
+Tokens.card_position_text = "第 %d / %d 张"
+Tokens.card_front_text = "卡片正面"
+Tokens.card_back_text = "卡片背面"
+
 --- `已 N · 余 M` -- never `N/M`, which reads as a fraction of the whole deck.
 -- @int done
 -- @int remaining
@@ -287,29 +295,56 @@ function Tokens.body_font_px(width, height)
     return px
 end
 
---- Remove pinned `font-size` declarations so the adaptive size wins.
+--- Body font size for the TitleBar/TextViewer card layout, in device pixels.
 --
--- The cascade would otherwise let the template's px value override the base
--- font passed to the HTML box.  `em`/`%` sizes that remain inherit from the new
--- base, which keeps relative emphasis intact.
+-- This layout leaves MuPDF in charge of the body: it reserves about 2em of
+-- horizontal margin for itself, so the size is a page-typography number rather
+-- than a "fill the panel" number.  38 px on a 1072-wide Voyage leaves ~24 CJK
+-- glyphs per line inside the reserved margin, which is the density the
+-- reference reader has.
+function Tokens.card_font_px(width, height)
+    width = tonumber(width) or 1072
+    height = tonumber(height) or 1448
+    local px = math.floor(width * 0.036)
+    if px < 22 then
+        px = 22
+    elseif px > 48 then
+        px = 48
+    end
+    return px
+end
+
 --- Drop painted backgrounds so the card sits on the panel's own paper.
 --
 -- Anki decks often carry ruled/grey/photo backgrounds; on a 16-level e-ink
 -- panel they turn into dithering and swallow the text.  Text colour is kept so
 -- intentional emphasis survives.
+--
+-- Everything is removed, including `url(...)` paints: the media files are not
+-- on the device, and MuPDF turns a missing url() into a broken-image box that
+-- shifts the whole card.  The url() form is matched first because a `data:`
+-- URI contains `;` inside the parentheses.
+local function strip_declaration(css, property_pattern)
+    local pattern = "([;{]%s*)" .. property_pattern .. "%s*:%s*[^;{}]*;?"
+    return (css:gsub(pattern, "%1"))
+end
+
 function Tokens.strip_backgrounds(css)
     css = tostring(css or "")
-    -- Data URIs contain ";" inside url(...), so the shorthand is only stripped
-    -- when the value has no url(); background-image is handled separately.
-    css = css:gsub("background%-image%s*:%s*[^;}]+;?", "")
-    css = css:gsub("background%-color%s*:%s*[^;}]+;?", "")
-    css = css:gsub("box%-shadow%s*:%s*[^;}]+;?", "")
-    css = css:gsub("background%s*:%s*([^;}]+);?", function(value)
-        if value:lower():find("url%(", 1) then
-            return "background:" .. value .. ";"
-        end
-        return ""
-    end)
+    css = css:gsub("([;{]%s*)background[%a%-]*%s*:%s*[^;{}]-url%([^%)]*%)[^;{}]*;?", "%1")
+    local properties = {
+        "background%-image",
+        "background%-color",
+        "background%-repeat",
+        "background%-position",
+        "background%-size",
+        "background%-attachment",
+        "background",
+        "box%-shadow",
+    }
+    for _, property in ipairs(properties) do
+        css = strip_declaration(css, property)
+    end
     return css
 end
 
@@ -317,24 +352,100 @@ end
 --
 -- MuPDF keeps applying the template's `.card { text-align: center }` even when
 -- the wrapper carries an inline left alignment, so the declaration is removed.
+-- `!important` is swallowed with it: leaving the keyword behind is a CSS syntax
+-- error, and those are the cards whose margins came out different.
 function Tokens.strip_alignment(css)
-    return (tostring(css or ""):gsub("text%-align%s*:%s*[^;}]+;?", ""))
+    return (tostring(css or ""):gsub("([;{]%s*)text%-align%s*:%s*[^;{}]*;?", "%1"))
 end
 
 --- Kill the default block margins MuPDF adds (h1/h2/p/body), which produced a
--- large blank band above the text.
+--- large blank band above the text.
 function Tokens.flush_margins_css()
     return "body,h1,h2,h3,h4,h5,h6,p,ul,ol,li,blockquote,pre,div,table"
         .. "{margin:0;padding:0;}"
 end
 
+--- Hard layout rules, appended *after* the template stylesheet.
+--
+-- Equal specificity + later declaration wins, so a deck that pins its own
+-- `.card { margin/padding/width }` can no longer move the text; the base
+-- stylesheet alone was prepended and therefore always lost that fight.
+--
+-- `body` is deliberately left with its padding intact: the page inset of the
+-- study screen lives there (see BASE_CSS in ui/studyview.lua).  Only the
+-- margins are zeroed.
+function Tokens.layout_override_css()
+    return table.concat({
+        "html, body { margin: 0; background: transparent; }",
+        ".card, .card1, .card2, .card3, .card4, .card5 {",
+        "  margin: 0; padding: 0; width: auto;",
+        "  background: transparent; text-align: left; }",
+        "img { max-width: 100%; }",
+    }, string.char(10))
+end
+
+--- Strip absolute font sizes; `em`/`%` keep inheriting from the chosen base.
+--
+-- The value is matched whole, not just the number: the old pattern cut
+-- `font-size: calc(1em - 2px)` in half, which is a CSS syntax error and makes
+-- MuPDF drop every declaration after it.  The declaration is also matched
+-- without looking at the previous character, because decks put comments
+-- between declarations (`; /* 粉色文字 */\n font-size: ...`), and those were
+-- exactly the sheets that kept their pinned sizes.
 function Tokens.strip_font_size(css)
     css = tostring(css or "")
-    -- Only absolute units: `em`/`%` should keep inheriting from the new base.
-    css = css:gsub("font%-size%s*:%s*[%d%.]+%s*px%s*;?", "")
-    css = css:gsub("font%-size%s*:%s*[%d%.]+%s*pt%s*;?", "")
+    css = css:gsub("font%-size%s*:%s*([^;{}]+)%s*;?", function(value)
+        value = value:gsub("%s+$", "")
+        if value:find("%d%.?%d*%s*px") or value:find("%d%.?%d*%s*pt") then
+            return ""
+        end
+        return "font-size:" .. value .. ";"
+    end)
     return css
 end
 
-return Tokens
+--- Remove declarations whose value was stripped away.
+--
+-- Decks ship stylesheets that are already broken (`color: ;` with nothing
+-- after the colon is common), and our own stripping can blank a value.  MuPDF
+-- stops at the syntax error and drops what follows, so tidy the sheet before
+-- handing it over.
+function Tokens.tidy_declarations(css)
+    css = tostring(css or "")
+    local previous
+    repeat
+        previous = css
+        css = css:gsub("([;{]%s*)[%a%-]+%s*:%s*;", "%1")
+        css = css:gsub(";%s*;", ";")
+        css = css:gsub("{[%s;]*}", "{ }")
+        css = css:gsub("%s*;%s*}", " }")
+    until css == previous
+    return css
+end
 
+--- Sanitise a `style="..."` attribute value.
+--
+-- The template stylesheet is only half the story: notes commonly carry inline
+-- `text-align:center` / `margin` / `background` styles that the stylesheet
+-- stripper never sees.
+function Tokens.sanitize_style_attr(declarations)
+    local css = tostring(declarations or "")
+    css = Tokens.strip_font_size(css)
+    css = Tokens.strip_alignment(css)
+    css = Tokens.strip_backgrounds(css)
+    return Tokens.tidy_declarations(css)
+end
+
+--- Sanitise every inline style attribute in a card's HTML.
+function Tokens.sanitize_html(html)
+    html = tostring(html or "")
+    html = html:gsub('(style%s*=%s*")([^"]*)(")', function(prefix, value, suffix)
+        return prefix .. Tokens.sanitize_style_attr(value) .. suffix
+    end)
+    html = html:gsub("(style%s*=%s*')([^']*)(')", function(prefix, value, suffix)
+        return prefix .. Tokens.sanitize_style_attr(value) .. suffix
+    end)
+    return html
+end
+
+return Tokens
