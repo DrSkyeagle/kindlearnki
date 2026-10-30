@@ -74,6 +74,18 @@ do
     end
 end
 
+-- The card must use the panel width; MuPDF's own 2em margin is compensated,
+-- so the laid-out content has to be as wide as the body box.
+do
+    local page = top.body.document:openPage(1)
+    local x0, _, x1 = page:getUsedBBox()
+    page:close()
+    local content_w = x1 - x0
+    assert((top.body_shift_x or 0) <= 0, "card was not shifted left")
+    assert(content_w >= top.layout.body.w - 8,
+        string.format("content is %d px wide, box is %d", content_w, top.layout.body.w))
+end
+
 shot("10-study-from-deck")
 print("STUDY-TAP-OK")
 os.exit(0)

@@ -270,6 +270,31 @@ function StudyView:_load_html_body(html, css, resource_dir, key)
             .. string.char(10)
             .. string.format(".card{font-size:%dpx;background-color:#fff;color:#000;margin:0;padding:0;text-align:left;}", body_px)
         body:setContent(html, card_css, body_px, nil, nil, resource_dir)
+        --[[ MuPDF lays HTML out with a fixed page margin measured in em (about
+        2em horizontally, 3em vertically: 110/165 px at 55 px).  Neither a CSS
+        reset nor an inline style removes it, so measure it once and re-layout
+        the *same* document wider, then paint shifted.  Re-laying out is cheap;
+        re-parsing would double the native peak that already made the device
+        reboot. ]]
+        self.body_shift_x = 0
+        self.body_shift_y = 0
+        if self.body_page_count <= 1 then
+            pcall(function()
+                local page = body.document:openPage(1)
+                local x0, y0 = page:getUsedBBox()
+                page:close()
+                local margin = math.floor(tonumber(x0) or 0)
+                local top = math.floor(tonumber(y0) or 0)
+                if margin > 2 or top > 2 then
+                    body.dimen.w = box.w + 2 * math.max(margin, 0)
+                    body.document:layoutDocument(body.dimen.w, body.dimen.h, body_px)
+                    body.page_count = body.document:getPages()
+                    self.body_shift_x = -math.max(margin, 0)
+                    self.body_shift_y = -math.max(top, 0)
+                end
+            end)
+        end
+
         -- Native memory is the suspect for the device reboot after two cards;
         -- leaving a breadcrumb in the log makes the next crash readable.
         pcall(function()
@@ -558,6 +583,9 @@ function StudyView:paintTo(bb, x, y)
     end
     local faces = layout.faces
 
+    -- 正文先画，页眉/进度线/答案栏后画：卡片上移后仍不会盖住顶部信息。
+    self:_paint_body(bb, x, y, colors)
+
     --== meta 行 =======================================================
     if layout.deck_name and layout.deck_name ~= "" then
         Widgets.draw(bb, x + layout.content_x, y + layout.meta_baseline,
@@ -586,7 +614,6 @@ function StudyView:paintTo(bb, x, y)
     end
 
     --== 正文 ==========================================================
-    self:_paint_body(bb, x, y, colors)
 
     --== 底部动作区 ====================================================
     local action = layout.action
@@ -637,7 +664,8 @@ function StudyView:_paint_body(bb, x, y, colors)
         -- box, like a page of a book.
         -- 贴顶：卡片从正文区上沿开始，不再垂直居中留出大片空白。
         local offset = 0
-        local ok, err = pcall(self.body.paintTo, self.body, bb, x + box.x, y + box.y + offset)
+        local ok, err = pcall(self.body.paintTo, self.body, bb,
+            x + box.x + (self.body_shift_x or 0), y + box.y + offset + (self.body_shift_y or 0))
         if not ok then
             logger.warn("kindleanki: card body paint failed:", err)
         end
