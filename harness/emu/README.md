@@ -1,11 +1,11 @@
-# KindleAnki eink-emulator harness (Kindle Voyage 5.13.6 in QEMU)
+# Kindlearnki eink-emulator harness (Kindle Voyage 5.13.6 in QEMU)
 
 Real-firmware QEMU emulator used to **visually verify the plugin's 1072x1448
 layout** without touching a physical Kindle.  Everything here runs in WSL2
 distro `KO-test`; the Windows wrapper `emu.cmd` drives it.
 
 Status: **working** (2026-10-31).  The plugin loads on the emulated Voyage
-(`kindleanki: koreader=v2026.07.1 model=KindleVoyage html=ok sqlite=ok
+(`kindlearnki: koreader=v2026.07.1 model=KindleVoyage html=ok sqlite=ok
 zstd=ok ca=yes`), the deck list and the study card view render, and screenshots
 are captured headlessly through QMP.  One-command loop after a code change:
 **~20 s** (warm) / **~2.5 min** (cold boot).
@@ -26,7 +26,7 @@ D:\ankindle\harness\emu\emu.cmd evidence           :: write out\emu\plugin-load.
 
 PNGs land in `D:\ankindle\out\emu\<name>.png` plus a timestamped
 `<name>-YYYYmmdd-HHMMSS.png` copy.  `emu.cmd refresh` always pushes the current
-`D:\ankindle\kindleanki.koplugin` and restarts KOReader, so it is the normal
+`D:\ankindle\kindlearnki.koplugin` and restarts KOReader, so it is the normal
 "after editing the plugin" command.  It is safe to re-run with QEMU up or down.
 
 ## What runs where
@@ -40,8 +40,8 @@ PNGs land in `D:\ankindle\out\emu\<name>.png` plus a timestamped
 | guest QMP | `machines/kv/kv.qmp.sock` | used for screendump |
 | guest serial | `machines/kv/kv.serial.log` | real boot/firmware log |
 | KOReader tree | guest `/mnt/us/koreader` (86 MB) | kindlepw2 v2026.07.1, started directly via `luajit reader.lua` |
-| plugin | guest `/mnt/us/koreader/plugins/kindleanki.koplugin` | pushed from `D:\ankindle\kindleanki.koplugin` |
-| collection | guest `/mnt/us/koreader/kindleanki/collection.anki2` | copied from `C:\deepseekharness\koanki\bench\work\live\collection.anki2` |
+| plugin | guest `/mnt/us/koreader/plugins/kindlearnki.koplugin` | pushed from `D:\ankindle\kindlearnki.koplugin` |
+| collection | guest `/mnt/us/koreader/kindlearnki/collection.anki2` | copied from `C:\deepseekharness\koanki\bench\work\live\collection.anki2` |
 | KOReader settings | guest `/mnt/us/koreader/settings.reader.lua` | `httpinspector.autostart=true` is merged in |
 | KOReader log | guest `/tmp/ko2.log` | plugin lines + `card render` lines |
 | screenshots | `D:\ankindle\out\emu\` | PNG, 1072x1448 |
@@ -57,7 +57,7 @@ All are bash, run inside WSL; `emu.cmd`/`emu.ps1` are thin Windows wrappers.
 | script | purpose |
 |---|---|
 | `emu_up.sh` | create machine if missing, start QEMU (headless, QMP+serial sockets, `-watchdog-action none`), wait SSH, stop framework, fix startup-script hash, install KOReader tree if missing, then delegate to `emu_push_plugin.sh`. Idempotent; reuses a running QEMU; removes stale sockets; if QEMU dies during boot it prints the tail of `kv.serial.log` instead of retrying. |
-| `emu_push_plugin.sh` | tar the current plugin into the guest, restore the fixture collection (`--force-fixture` to always, `--no-fixture` to skip), merge httpinspector autostart, restart KOReader, wait for `kindleanki: ... model=KindleVoyage`, wait for port 8080. |
+| `emu_push_plugin.sh` | tar the current plugin into the guest, restore the fixture collection (`--force-fixture` to always, `--no-fixture` to skip), merge httpinspector autostart, restart KOReader, wait for `kindlearnki: ... model=KindleVoyage`, wait for port 8080. |
 | `emu_shot.sh <name>` | QMP screendump (`eink-qmp.py --machine kv screendump /tmp/x.ppm`) + stdlib-only PPM→PNG conversion (`ppm2png.py`; the QEMU build has no libpng) → `out/emu/<name>.png` (+ timestamped copy). Prints both Windows paths. Fails clearly if QEMU is down. |
 | `emu_nav.sh <cmd>` | programmatic navigation through KOReader's httpinspector — see below. |
 | `emu_refresh.sh <name> [--nav X ...]` | one command: `emu_up.sh` → navigation → screenshot. Restores the fixture collection each run by default (`--keep-progress` to keep rating state). |
@@ -85,17 +85,17 @@ Two routes:
 
 1. **Lead's debug hook** (preferred when present, not yet in the plugin):
    ```
-   curl -sS "http://127.0.0.1:8080/koreader/globals/KindleAnkiDebug/open_study/1"
+   curl -sS "http://127.0.0.1:8080/koreader/globals/KindlearnkiDebug/open_study/1"
    ```
    `curl` exists in the guest (`/usr/bin/curl`); `wget -qO-` also works.  The
    generic global-function call mechanism is verified (`/koreader/globals/tostring/5`
-   returns `"5"`), so this URL will work as soon as `_G.KindleAnkiDebug` is
+   returns `"5"`), so this URL will work as soon as `_G.KindlearnkiDebug` is
    defined on plugin load.  `emu_nav.sh study` automatically prefers the hook
    when present and otherwise uses route 2, so nothing needs to change.
 2. **KOReader window stack** (works today, needs no plugin change):
    ```
    # open the deck list
-   curl -sS "http://127.0.0.1:8080/koreader/event/KindleAnkiStudy"
+   curl -sS "http://127.0.0.1:8080/koreader/event/KindlearnkiStudy"
    # which widgets are on screen
    curl -sS "http://127.0.0.1:8080/koreader/UIManager/_window_stack/2/widget/name"
    # read the first deck row's id, then open it

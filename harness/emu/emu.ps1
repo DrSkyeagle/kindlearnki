@@ -1,4 +1,4 @@
-# Windows wrapper for the KindleAnki eink-emulator harness.
+# Windows wrapper for the Kindlearnki eink-emulator harness.
 #
 #   D:\ankindle\harness\emu\emu.cmd up
 #   D:\ankindle\harness\emu\emu.cmd push

@@ -22,7 +22,7 @@ fi
 
 # Make sure the plugin under development is the one that loads.
 if [ -n "${PLUGIN_DIR:-}" ] && [ -d "$PLUGIN_DIR" ]; then
-    rm -rf "$KO/plugins/kindleanki.koplugin"
+    rm -rf "$KO/plugins/kindlearnki.koplugin"
     cp -r "$PLUGIN_DIR" "$KO/plugins/"
 fi
 

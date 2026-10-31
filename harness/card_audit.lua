@@ -5,7 +5,7 @@ being eyeballed on one screenshot.
 
     COLLECTION=<collection.anki2> AUDIT_N=60 \
       xvfb-run -a env SDL_VIDEODRIVER=x11 \
-      PLUGIN_DIR=/mnt/d/ankindle/kindleanki.koplugin \
+      PLUGIN_DIR=/mnt/d/ankindle/kindlearnki.koplugin \
       ./luajit /mnt/d/ankindle/harness/card_audit.lua
 
 For every face it prints one CSV line:
@@ -25,7 +25,7 @@ Flags:
 Exit code 1 when a face is blank/stale or has a broken horizontal margin.
 ]]
 
-local plugin_dir = os.getenv("PLUGIN_DIR") or "/mnt/d/ankindle/kindleanki.koplugin"
+local plugin_dir = os.getenv("PLUGIN_DIR") or "/mnt/d/ankindle/kindlearnki.koplugin"
 local collection_path = assert(os.getenv("COLLECTION"), "COLLECTION is required")
 local limit = tonumber(os.getenv("AUDIT_N")) or 40
 local out_path = os.getenv("AUDIT_OUT") or ""

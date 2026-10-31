@@ -7,7 +7,7 @@ set -uo pipefail
 
 KO=${KO:-/root/koanki-test/squashfs-root/usr/lib/koreader}
 COLLECTION=${COLLECTION:-/mnt/c/deepseekharness/koanki/bench/work/live/collection.anki2}
-PLUGIN_DIR=${PLUGIN_DIR:-/mnt/d/ankindle/kindleanki.koplugin}
+PLUGIN_DIR=${PLUGIN_DIR:-/mnt/d/ankindle/kindlearnki.koplugin}
 PORT=${PORT:-9123}
 
 fail=0

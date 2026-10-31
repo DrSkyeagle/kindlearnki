@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.3.0] — 2026-10-31
+
+对外发布版本，项目改名为 **kindlearnki**（此前提到的路径与名称按新名显示）。
+
+### Changed
+
+- 插件目录、日志前缀、数据目录、设置文件、Dispatcher 动作与组件名统一改为
+  `kindlearnki`：`koreader/plugins/kindlearnki.koplugin/`、
+  `koreader/kindlearnki/`、`koreader/settings/kindlearnki.lua`、
+  `KindlearnkiStudy` / `KindlearnkiSync`。
+- **升级不丢进度**：首次启动会把旧的 `koreader/kindleanki/collection.anki2`
+  （连同 WAL/SHM）和 `settings/kindleanki.lua` 复制到新路径，旧文件保留可回退。
+  日志里会出现 `migrated kindleanki data ...`。
+
+### Docs / repo
+
+- README 重写为发布版：安装、使用、同步行为、数据位置、已知限制、开发与测试、致谢。
+- `LICENSE` 增加项目版权头；新增 `THIRD_PARTY_NOTICES.md`（视觉参考与协议出处）、
+  `CONTRIBUTING.md`、GitHub Actions（Windows 上跑离线测试 + 打包）。
+- 清掉误提交的杂物文件。
+
 ## 模拟器 A 端到端同步（2026-10-31，arm 固件 + 真 KOReader）
 
 `harness/emu/emu_sync_mock.sh`：把 `harness/mock_ankiweb.py` 用 `ssh -R` 挂到
@@ -40,7 +61,7 @@ sanityCheck2, finish             -> sync: finished local_usn_now=100
 
 - **牌组页的"同步"按钮绕过了登录检查**：它直接调 `run_sync()`，没登录时照样
   向 AnkiWeb POST，拿到 HTTP 400，再把"客户端版本可能过旧，请更新插件"这种误导
-  信息甩给用户。现在走 `onKindleAnkiSync()`，未登录先弹登录框。
+  信息甩给用户。现在走 `onKindlearnkiSync()`，未登录先弹登录框。
 - **刷完最后一张后停在死界面**：卡片看完后画面还留在最后一张，标题继续显示
   `第 4 / 4 张`，底部还有"显示答案"和间隔为空的评分按钮，按哪个都没反应。
   现在 `controller.on_rate` 发现队列空了就关闭复习页并提示"本轮完成：共 N 张"。
@@ -54,7 +75,7 @@ sanityCheck2, finish             -> sync: finished local_usn_now=100
 ### Tests
 
 - `tests/test_ui_guards.lua`：把这两处调用点钉住（同步按钮必须走
-  `onKindleAnkiSync`；队列结束必须关闭复习页并给出提示）。
+  `onKindlearnkiSync`；队列结束必须关闭复习页并给出提示）。
 
 ## [0.2.19] — 2026-10-31
 
@@ -286,7 +307,7 @@ sanityCheck2, finish             -> sync: finished local_usn_now=100
 ### Fixed
 
 1. **数据目录不存在**：`ljsqlite3[cantopen] unable to open database file`。插件从未创建
-   `<koreader>/kindleanki/`，SQLite 不会替你创建父目录。新增 `Paths.mkdir_p` /
+   `<koreader>/kindlearnki/`，SQLite 不会替你创建父目录。新增 `Paths.mkdir_p` /
    `Paths.ensure`（优先用 KOReader 自带 lfs，桌面回退到 shell），在 `init()`、
    `open_collection()`、`full_sync()` 之前调用。
 2. **下载前预先打开了空库**：整库下载分支先 `Model.open()` 建了个空 SQLite 文件，

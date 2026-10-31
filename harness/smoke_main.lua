@@ -2,7 +2,7 @@
 Runtime smoke test for the plugin entry point.
 
     cd <koreader tree>
-    PLUGIN_DIR=/mnt/d/ankindle/kindleanki.koplugin \
+    PLUGIN_DIR=/mnt/d/ankindle/kindlearnki.koplugin \
       xvfb-run -a ./luajit /mnt/d/ankindle/harness/smoke_main.lua
 
 Loads `main.lua` the way KOReader does, instantiates it, and then **calls the
@@ -12,7 +12,7 @@ missing `require` that only fails when a method runs -- the device log read
 `busy()` -- so this harness exercises `network_selftest` for real.
 ]]
 
-local plugin_dir = os.getenv("PLUGIN_DIR") or "/mnt/d/ankindle/kindleanki.koplugin"
+local plugin_dir = os.getenv("PLUGIN_DIR") or "/mnt/d/ankindle/kindlearnki.koplugin"
 
 require("setupkoenv")
 
@@ -62,7 +62,7 @@ print("SMOKE-OK network_selftest returned " .. tostring(result))
 -- an *empty* SQLite file is intentionally not done here: that is what bug #2
 -- was, and `tests/test_runner.lua` covers the download-then-open sequence.
 local Paths = require("core.paths")
-local base = "/tmp/kindleanki-smoke-" .. tostring(os.time())
+local base = "/tmp/kindlearnki-smoke-" .. tostring(os.time())
 local paths = Paths.new(base, base .. "/settings")
 local ok_dirs, dir_err = Paths.ensure(paths)
 assert(ok_dirs, "Paths.ensure failed: " .. tostring(dir_err))

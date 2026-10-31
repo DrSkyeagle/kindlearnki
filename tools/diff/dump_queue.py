@@ -45,7 +45,7 @@ from google.protobuf.json_format import MessageToDict
 
 
 def _copy_collection(path: str) -> tuple[str, str]:
-    workdir = tempfile.mkdtemp(prefix="kindleanki-diff-")
+    workdir = tempfile.mkdtemp(prefix="kindlearnki-diff-")
     target = os.path.join(workdir, "collection.anki2")
     for suffix in ("", "-wal", "-shm"):
         source = path + suffix

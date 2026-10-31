@@ -14,7 +14,7 @@ structural mode the first applyChanges carries a deck change, which must make
 the runner adopt the server collection and still deliver the pending review.
 ]]
 
-local plugin_dir = os.getenv("PLUGIN_DIR") or "/mnt/d/ankindle/kindleanki.koplugin"
+local plugin_dir = os.getenv("PLUGIN_DIR") or "/mnt/d/ankindle/kindlearnki.koplugin"
 local collection_path = assert(os.getenv("COLLECTION"), "COLLECTION is required")
 local port = tonumber(os.getenv("MOCK_PORT")) or 9123
 local log_path = os.getenv("MOCK_LOG") or "/tmp/mock-sync.jsonl"

@@ -5,7 +5,7 @@ Lua 调度器在同一个夹具上重放，比较：
 
 - **队列顺序**：必须逐条一致；
 - **间隔**：允许 fuzz 区间（0.95–1.05），不要求逐值相同；
-- **计数 / elapsed_days / 学习步秒数**：见 `kindleanki.koplugin/tests/test_sched_golden.lua`。
+- **计数 / elapsed_days / 学习步秒数**：见 `kindlearnki.koplugin/tests/test_sched_golden.lua`。
 
 ## 依赖
 
@@ -61,8 +61,8 @@ FIXTURE-SANITIZED decks.common TEXT->BLOB (1 row(s))
 `pragma integrity_check` 的 `row not in PRIMARY KEY order for tags` 只作为
 `FIXTURE-NOTE ... (informational)` 打印，不影响调度 dump。
 
-写入侧的正确做法见 `kindleanki.koplugin/db/conn.lua` 的 `Conn.blob()`；回归测试在
-`kindleanki.koplugin/tests/test_blob_types.lua`（`bump_studied writes decks.common as a BLOB`）。
+写入侧的正确做法见 `kindlearnki.koplugin/db/conn.lua` 的 `Conn.blob()`；回归测试在
+`kindlearnki.koplugin/tests/test_blob_types.lua`（`bump_studied writes decks.common as a BLOB`）。
 
 ## 旧用法（JSON 队列，保留）
 

@@ -13,7 +13,7 @@ Prints one line per card and a verdict: pass when RSS stays within
 SOAK_GROWTH_MB (default 40) of the first card.
 ]]
 
-local plugin_dir = os.getenv("PLUGIN_DIR") or "/mnt/d/ankindle/kindleanki.koplugin"
+local plugin_dir = os.getenv("PLUGIN_DIR") or "/mnt/d/ankindle/kindlearnki.koplugin"
 local collection_path = assert(os.getenv("COLLECTION"), "COLLECTION is required")
 local rounds = tonumber(os.getenv("SOAK_N")) or 40
 local growth_limit_mb = tonumber(os.getenv("SOAK_GROWTH_MB")) or 40

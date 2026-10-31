@@ -2,7 +2,7 @@
 Require plugin modules inside a real KOReader tree and report the first error.
 
     cd <koreader tree>
-    PLUGIN_DIR=/mnt/d/ankindle/kindleanki.koplugin \
+    PLUGIN_DIR=/mnt/d/ankindle/kindlearnki.koplugin \
       ./luajit /mnt/d/ankindle/harness/require_check.lua [module ...]
 
 With no module arguments it checks the whole plugin surface, including the UI
@@ -11,7 +11,7 @@ that would have caught "登录界面不可用" (a `require` of a widget that doe
 exist in this KOReader release) before it reached the device.
 ]]
 
-local plugin_dir = os.getenv("PLUGIN_DIR") or "/mnt/d/ankindle/kindleanki.koplugin"
+local plugin_dir = os.getenv("PLUGIN_DIR") or "/mnt/d/ankindle/kindlearnki.koplugin"
 
 require("setupkoenv")
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Package kindleanki.koplugin as a zip that can be dropped on the Kindle.
+"""Package kindlearnki.koplugin as a zip that can be dropped on the Kindle.
 
-    python tools/pack_plugin.py            # build out/kindleanki.koplugin-<ver>.zip
+    python tools/pack_plugin.py            # build out/kindlearnki.koplugin-<ver>.zip
     python tools/pack_plugin.py --check    # compare archive bytes with sources
 
-The archive contains a single top-level `kindleanki.koplugin/` directory, which
+The archive contains a single top-level `kindlearnki.koplugin/` directory, which
 is what KOReader expects under `koreader/plugins/`.  Tests and developer docs are
 excluded: they are large, and the plugin must not pay for them at runtime.
 """
@@ -20,7 +20,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-PLUGIN = ROOT / "kindleanki.koplugin"
+PLUGIN = ROOT / "kindlearnki.koplugin"
 OUT = ROOT / "out"
 
 EXCLUDED_DIRS = {"tests", "doc"}
@@ -84,7 +84,7 @@ def build(target: Path) -> int:
     count = 0
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
         for path, relative in iter_files():
-            archive.write(path, "kindleanki.koplugin/" + relative.as_posix())
+            archive.write(path, "kindlearnki.koplugin/" + relative.as_posix())
             count += 1
     print(f"wrote {target} ({count} entries)")
     return 0
@@ -99,7 +99,7 @@ def check(target: Path) -> int:
         names = set(archive.namelist())
         expected = set()
         for path, relative in iter_files():
-            name = "kindleanki.koplugin/" + relative.as_posix()
+            name = "kindlearnki.koplugin/" + relative.as_posix()
             expected.add(name)
             if name not in names:
                 problems.append(f"missing from archive: {name}")
@@ -126,7 +126,7 @@ def main(argv=None) -> int:
     parser.add_argument("--out", default=None)
     args = parser.parse_args(argv)
 
-    target = Path(args.out) if args.out else OUT / f"kindleanki.koplugin-{version()}.zip"
+    target = Path(args.out) if args.out else OUT / f"kindlearnki.koplugin-{version()}.zip"
     return check(target) if args.check else build(target)
 
 

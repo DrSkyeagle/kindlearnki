@@ -27,10 +27,10 @@ sharpest signal: it only grows by the reviews this device made).
 -- http access log.
 local host = "192.168.0.136:8000"
 local ko = "/mnt/us/koreader"
-local local_path = ko .. "/kindleanki/collection.anki2"
-local settings_path = ko .. "/settings/kindleanki.lua"
+local local_path = ko .. "/kindlearnki/collection.anki2"
+local settings_path = ko .. "/settings/kindlearnki.lua"
 
-package.path = ko .. "/plugins/kindleanki.koplugin/?.lua;"
+package.path = ko .. "/plugins/kindlearnki.koplugin/?.lua;"
     .. ko .. "/common/?.lua;" .. ko .. "/frontend/?.lua;" .. package.path
 
 local function report(text)

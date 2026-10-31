@@ -9,7 +9,7 @@ card style helper, which only runs when a card is rendered.  This harness walks
 the real path: DeckView zone -> on_open -> Controller.start_study -> card render.
 ]]
 
-local plugin_dir = os.getenv("PLUGIN_DIR") or "/mnt/d/ankindle/kindleanki.koplugin"
+local plugin_dir = os.getenv("PLUGIN_DIR") or "/mnt/d/ankindle/kindlearnki.koplugin"
 local collection_path = assert(os.getenv("COLLECTION"), "COLLECTION is required")
 local shot_dir = os.getenv("SHOT_DIR") or "/tmp"
 
@@ -61,7 +61,7 @@ view:onTapDeckList(nil, { pos = pos })
 UIManager:forceRePaint()
 
 local top = UIManager:getTopmostVisibleWidget()
-assert(top and top.name == "kindleanki_studyview",
+assert(top and top.name == "kindlearnki_studyview",
     "tapping the deck row did not open the study screen (top="
         .. tostring(top and top.name) .. ")")
 
@@ -122,7 +122,7 @@ shot("10-study-from-deck")
 -- Walk three cards the way the device does: show answer, rate, next card.
 for round = 1, 3 do
     local view = UIManager:getTopmostVisibleWidget()
-    if not view or view.name ~= "kindleanki_studyview" then
+    if not view or view.name ~= "kindlearnki_studyview" then
         print("cycle stop at round " .. round .. " (top="
             .. tostring(view and view.name) .. ")")
         break
@@ -144,7 +144,7 @@ do
     local rounds = 0
     while rounds < 12 do
         local top_view = UIManager:getTopmostVisibleWidget()
-        if not top_view or top_view.name ~= "kindleanki_studyview" then
+        if not top_view or top_view.name ~= "kindlearnki_studyview" then
             break
         end
         top_view:_rate(3)
@@ -159,7 +159,7 @@ do
     print(string.format("DRAIN rounds=%d top=%s stack=%s", rounds,
         tostring(last and (last.name or last.id or tostring(last)) or "none"),
         table.concat(stack, ",")))
-    assert(not last or last.name ~= "kindleanki_studyview",
+    assert(not last or last.name ~= "kindlearnki_studyview",
         "study screen stayed open after the queue drained")
 end
 print("CYCLE-DONE")

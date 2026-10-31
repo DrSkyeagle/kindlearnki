@@ -28,9 +28,9 @@ return {
 }
 LUA
 guest_ssh "mkdir -p $GUEST_KO/settings"
-cat "$settings_file" | guest_ssh "cat > $GUEST_KO/settings/kindleanki.lua"
+cat "$settings_file" | guest_ssh "cat > $GUEST_KO/settings/kindlearnki.lua"
 rm -f "$settings_file"
-guest_ssh_q "grep -c '127.0.0.1:$PORT' $GUEST_KO/settings/kindleanki.lua" || true
+guest_ssh_q "grep -c '127.0.0.1:$PORT' $GUEST_KO/settings/kindlearnki.lua" || true
 
 log "starting the mock server ($MODE) on :$PORT"
 rm -f "$MOCK_LOG"
@@ -66,10 +66,10 @@ for _ in $(seq 1 90); do
     fi
     sleep 2
 done
-guest_ssh_q "grep 'kindleanki: koreader=' $GUEST_KO_LOG | tail -1" || true
+guest_ssh_q "grep 'kindlearnki: koreader=' $GUEST_KO_LOG | tail -1" || true
 
 log "triggering a sync"
-guest_ssh "curl -sS -m 60 'http://127.0.0.1:8080/koreader/event/KindleAnkiSync'" || true
+guest_ssh "curl -sS -m 60 'http://127.0.0.1:8080/koreader/event/KindlearnkiSync'" || true
 for _ in $(seq 1 60); do
     [ -s "$MOCK_LOG" ] && break
     sleep 2
@@ -80,11 +80,11 @@ log "mock requests:"
 grep -o '"path": "[a-zA-Z.]*"' "$MOCK_LOG" | sort | uniq -c || true
 
 log "plugin log:"
-guest_ssh "grep 'kindleanki' $GUEST_KO_LOG | tail -20" || true
+guest_ssh "grep 'kindlearnki' $GUEST_KO_LOG | tail -20" || true
 
 kill "$tunnel_pid" 2>/dev/null
 kill "$mock_pid" 2>/dev/null
 wait "$mock_pid" 2>/dev/null
 
 log "restoring: removing test settings and restarting KOReader"
-guest_ssh "rm -f $GUEST_KO/settings/kindleanki.lua; pkill -f '[r]eader.lua' >/dev/null 2>&1; sleep 2; true" || true
+guest_ssh "rm -f $GUEST_KO/settings/kindlearnki.lua; pkill -f '[r]eader.lua' >/dev/null 2>&1; sleep 2; true" || true

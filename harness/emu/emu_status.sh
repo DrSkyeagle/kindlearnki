@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Print the state of the emulator in one screen: pids, boot time, KOReader
-# plugin line, httpinspector, on-screen KindleAnki widgets, recent screenshots.
+# plugin line, httpinspector, on-screen Kindlearnki widgets, recent screenshots.
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=env.sh

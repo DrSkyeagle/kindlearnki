@@ -5,7 +5,7 @@
 -- This is the same code path as the device: resolve_host (meta + 308) →
 -- download (zstd) → write → open the SQLite file.  It is the closest possible
 -- verification off-device, short of the armv7 binary.
-local plugin_dir = os.getenv("PLUGIN_DIR") or "/mnt/d/ankindle/kindleanki.koplugin"
+local plugin_dir = os.getenv("PLUGIN_DIR") or "/mnt/d/ankindle/kindlearnki.koplugin"
 local hkey = assert(os.getenv("HKEY"), "HKEY is required")
 
 require("setupkoenv")

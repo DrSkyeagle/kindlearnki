@@ -14,7 +14,7 @@ FIRMWARE=${FIRMWARE:-5.13.6}
 
 # Windows D:\ankindle == /mnt/d/ankindle inside WSL.
 HOST_REPO=${HOST_REPO:-/mnt/d/ankindle}
-PLUGIN_SRC=${PLUGIN_SRC:-$HOST_REPO/kindleanki.koplugin}
+PLUGIN_SRC=${PLUGIN_SRC:-$HOST_REPO/kindlearnki.koplugin}
 OUT_DIR=${OUT_DIR:-$HOST_REPO/out/emu}
 FIXTURE=${FIXTURE:-/mnt/c/deepseekharness/koanki/bench/work/live/collection.anki2}
 
@@ -40,16 +40,16 @@ KO_ZIP=${KO_ZIP:-/root/kvemu/dl/koreader-kindlepw2-v2026.07.1.zip}
 
 # Paths *inside the guest*.
 GUEST_KO=/mnt/us/koreader
-GUEST_PLUGIN=$GUEST_KO/plugins/kindleanki.koplugin
+GUEST_PLUGIN=$GUEST_KO/plugins/kindlearnki.koplugin
 GUEST_DATA=$GUEST_KO
-GUEST_COLLECTION=$GUEST_KO/kindleanki/collection.anki2
+GUEST_COLLECTION=$GUEST_KO/kindlearnki/collection.anki2
 GUEST_SETTINGS=$GUEST_KO/settings
 # reader.lua opens G_reader_settings at DataStorage:getDataDir().."/settings.reader.lua"
 # and on Kindle the data dir is "." (cwd = /mnt/us/koreader), so this file is
 # next to reader.lua, NOT under settings/ (getSettingsDir() is only used for
-# plugin-specific *.lua files such as settings/kindleanki.lua).
+# plugin-specific *.lua files such as settings/kindlearnki.lua).
 GUEST_READER_SETTINGS=$GUEST_KO/settings.reader.lua
-GUEST_PLUGIN_SETTINGS=$GUEST_SETTINGS/kindleanki.lua
+GUEST_PLUGIN_SETTINGS=$GUEST_SETTINGS/kindlearnki.lua
 GUEST_KO_LOG=/tmp/ko2.log
 
 log()  { printf '[emu] %s\n' "$*" >&2; }
@@ -166,7 +166,7 @@ wait_plugin_log() {
     local timeout=${1:-240} start line now
     start=$(date +%s)
     while :; do
-        line=$(guest_ssh_q "grep -a -m1 'kindleanki: koreader=' $GUEST_KO_LOG 2>/dev/null" || true)
+        line=$(guest_ssh_q "grep -a -m1 'kindlearnki: koreader=' $GUEST_KO_LOG 2>/dev/null" || true)
         if [ -n "$line" ]; then
             printf '%s\n' "$line"
             return 0
@@ -181,7 +181,7 @@ wait_plugin_log() {
 }
 
 plugin_caps_line() {
-    guest_ssh_q "grep -a -m1 'kindleanki: koreader=' $GUEST_KO_LOG 2>/dev/null" || true
+    guest_ssh_q "grep -a -m1 'kindlearnki: koreader=' $GUEST_KO_LOG 2>/dev/null" || true
 }
 
 # httpinspector starts from a UIManager:nextTick after the plugin list is up,

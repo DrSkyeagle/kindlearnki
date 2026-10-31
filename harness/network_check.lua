@@ -2,7 +2,7 @@
 Exercise the real TLS path inside a KOReader tree (no credentials, no UI).
 
     cd <koreader tree>
-    PLUGIN_DIR=/mnt/d/ankindle/kindleanki.koplugin \
+    PLUGIN_DIR=/mnt/d/ankindle/kindlearnki.koplugin \
       ./luajit /mnt/d/ankindle/harness/network_check.lua
 
 This is the closest thing to the device that can run off-device: it uses the
@@ -11,7 +11,7 @@ the plugin's transport, so a broken LuaSec binding, a missing CA, or a bad
 option table shows up here instead of on the Kindle.
 ]]
 
-local plugin_dir = os.getenv("PLUGIN_DIR") or "/mnt/d/ankindle/kindleanki.koplugin"
+local plugin_dir = os.getenv("PLUGIN_DIR") or "/mnt/d/ankindle/kindlearnki.koplugin"
 
 require("setupkoenv")
 
@@ -42,7 +42,7 @@ local response, err = Transport.request{
     url = "https://sync.ankiweb.net/sync/meta",
     method = "POST",
     headers = {
-        ["anki-sync"] = '{"v":11,"k":"","c":"check,kindleanki,koreader","s":"abcdef"}',
+        ["anki-sync"] = '{"v":11,"k":"","c":"check,kindlearnki,koreader","s":"abcdef"}',
         ["content-type"] = "application/octet-stream",
         ["content-length"] = "0",
     },

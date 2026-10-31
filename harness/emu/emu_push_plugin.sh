@@ -6,7 +6,7 @@
 #   harness/emu/emu_push_plugin.sh --force-fixture
 #   harness/emu/emu_push_plugin.sh --no-restart  # copy files, leave KOReader alone
 #
-# This is the script to run after editing kindleanki.koplugin/**.  It is
+# This is the script to run after editing kindlearnki.koplugin/**.  It is
 # idempotent: it stops lab126_gui, replaces the plugin tree, reuses the existing
 # collection unless it changed, merges the httpinspector autostart flag into
 # settings.reader.lua, restarts KOReader only if asked, and verifies the log.
@@ -46,7 +46,7 @@ if [ "$copy_fixture" = auto ] || [ "$copy_fixture" = force ]; then
     guest_bytes=$(guest_ssh_q "stat -c %s $GUEST_COLLECTION 2>/dev/null" || true)
     if [ "$copy_fixture" = force ] || [ "$guest_bytes" != "$local_bytes" ]; then
         log "pushing collection ($local_bytes bytes) -> $GUEST_COLLECTION"
-        guest_ssh "mkdir -p $GUEST_KO/kindleanki"
+        guest_ssh "mkdir -p $GUEST_KO/kindlearnki"
         cat "$FIXTURE" | guest_ssh "cat > $GUEST_COLLECTION.tmp && mv -f $GUEST_COLLECTION.tmp $GUEST_COLLECTION"
     else
         log "collection already up to date ($guest_bytes bytes), skipping"

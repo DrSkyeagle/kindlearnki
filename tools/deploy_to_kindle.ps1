@@ -14,18 +14,18 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$source = Join-Path $PSScriptRoot '..\kindleanki.koplugin' | Resolve-Path
+$source = Join-Path $PSScriptRoot '..\kindlearnki.koplugin' | Resolve-Path
 $koreader = "${Drive}:\koreader"
 $reader = Join-Path $koreader 'reader.lua'
 $plugins = Join-Path $koreader 'plugins'
-$target = Join-Path $plugins 'kindleanki.koplugin'
+$target = Join-Path $plugins 'kindlearnki.koplugin'
 
 if (-not (Test-Path $reader)) {
     throw "not a KOReader install: $reader is missing"
 }
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$backup = Join-Path $plugins "kindleanki.koplugin.bak-$stamp"
+$backup = Join-Path $plugins "kindlearnki.koplugin.bak-$stamp"
 
 Write-Host "source : $source"
 Write-Host "target : $target"
