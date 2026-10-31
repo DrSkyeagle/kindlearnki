@@ -1,0 +1,4 @@
+# Everything in this repository is stored with LF endings and checked out
+# without translation. The packer compares plugin files byte-for-byte, so a
+# CRLF checkout would look like source drift.
+* -text

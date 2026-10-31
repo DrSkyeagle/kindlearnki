@@ -1,0 +1,10 @@
+# Build artifacts
+*.zip
+
+# Vendored LuaJIT documentation (kept out of the repo, not needed at runtime)
+tools/lj/doc/
+
+# Local scratch
+/tmp/
+/out/
+*.log

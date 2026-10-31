@@ -1,0 +1,8 @@
+LuaJIT-Auto-Builds r46
+https://github.com/Per-Terra/LuaJIT-Auto-Builds
+
+LuaJIT 2.1 c6ffc141a8762b41703f9287d63d93622a13dd8f
+https://luajit.org/git/luajit.git
+
+[Build Info.]
+OS: Windows X64

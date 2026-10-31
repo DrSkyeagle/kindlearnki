@@ -1,0 +1,21 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  l1:
+    # The offline suite runs on a bare LuaJIT; tools/lj ships one for Windows,
+    # which is also where the plugin was developed.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Offline suite (no KOReader required)
+        shell: pwsh
+        run: ./tools/lj/luajit.exe kindlearnki.koplugin/tests/run.lua
+
+      - name: Pack the plugin the way a release does
+        shell: pwsh
+        run: python tools/pack_plugin.py
