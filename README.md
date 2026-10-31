@@ -62,9 +62,15 @@ Licensed AGPL-3.0-or-later.
 
 ## 从 kindleanki 升级
 
-0.3.0 起项目改名为 **kindlearnki**（避免与同类项目混淆）。首次启动会自动把旧的
-`koreader/kindleanki/collection.anki2` 与 `koreader/settings/kindleanki.lua`
-复制到新路径，**进度和登录都保留**，旧文件原样留着可回退。
+0.3.0 起项目改名为 **kindlearnki**（避免与同类项目混淆）。升级步骤：
+
+1. **先删除**旧的插件目录 `koreader/plugins/kindleanki.koplugin/`
+   （两个插件目录同时存在时，KOReader 会先加载旧插件的 `core.*` 模块，新插件会报
+   `attempt to call field 'migrate_legacy'`；插件检测到这种情况会在日志里直接说明）。
+2. 按上面的安装步骤放进 `kindlearnki.koplugin`。
+3. 首次启动会自动把 `koreader/kindleanki/collection.anki2`（连同 WAL）与
+   `koreader/settings/kindleanki.lua` 复制到新路径，**进度和登录都保留**，
+   旧文件原样留着可回退。
 
 本项目与 `yizhixiaoheigou/kindle-anki` 的插件互不冲突（插件目录名不同、数据目录不同），
 可以同时安装，但入口和评分界面各自独立。

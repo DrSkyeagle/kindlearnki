@@ -102,6 +102,17 @@ function Kindlearnki:init()
         end
     end)
 
+    -- Module names inside a KOReader plugin are global (`require("core.paths")`
+    -- resolves to whichever plugin directory comes first on package.path), so a
+    -- leftover 0.2.x `kindleanki.koplugin` would shadow this plugin's modules and
+    -- fail with a message that points nowhere.  Say what is actually wrong.
+    if type(Paths.migrate_legacy) ~= "function" or Log.PREFIX ~= "kindlearnki" then
+        Log.err("another plugin is providing core.paths/core.log",
+            "(an old kindleanki.koplugin is probably still installed at",
+            "koreader/plugins/kindleanki.koplugin -- delete it and restart KOReader)")
+        return
+    end
+
     local ok, err = pcall(function()
         self.paths = Paths.for_koreader()
         -- First run on a device: SQLite cannot create the collection inside a
