@@ -29,7 +29,6 @@ local Log = require("core.log")
 local Paths = require("core.paths")
 local Trace = require("core.trace")
 local Capabilities = require("core.capabilities")
-local Probe = require("ui.probe")
 
 local Kindlearnki = WidgetContainer:extend{
     name = "kindlearnki",
@@ -228,15 +227,15 @@ function Kindlearnki:build_submenu()
             end,
         },
         {
-            text = _("诊断"),
+            text = _("删除卡片库"),
             callback = function()
-                self:show_diagnostics()
+                self:prompt_delete_library()
             end,
         },
         {
-            text = _("网络诊断"),
+            text = _("注销本地账户"),
             callback = function()
-                self:network_selftest()
+                self:prompt_logout_local()
             end,
         },
         {
@@ -322,6 +321,10 @@ function Kindlearnki:onKindlearnkiStudy()
     local ok, result = xpcall(function()
         local Controller = require("study.controller")
         return Controller.show_decks(collection, {
+            -- Where `<img src="...">` is resolved from.  Without it every card
+            -- image renders as MuPDF's `[image]` placeholder even when the file
+            -- is sitting in the media folder.
+            media_dir = self:media_dir(),
             -- The deck screen has its own 同步 button; without this callback it
             -- was a dead zone that swallowed the tap.  Route it through the
             -- hkey-guarded entry point: calling run_sync() directly POSTs to
@@ -337,6 +340,22 @@ function Kindlearnki:onKindlearnkiStudy()
         show_message(_("打开复习界面失败，详情见 crash.log。"))
     end
     return true
+end
+
+--- The media line appended to every sync result.
+--
+-- One fixed sentence, not a path interpolated from the `media_dir` setting: the
+-- folder is a constant of the plugin, and a path that changes with a setting
+-- reads like something the user has to configure before it works.  It is
+-- deliberately *not* repeated during study -- a user who keeps pictures off the
+-- device is making a choice, and the cards already show MuPDF's `[image]`.
+function Kindlearnki:media_hint()
+    return _("媒体文件可自行复制到koreader/kindlearnki/media中。")
+end
+
+--- A sync result message with the media line appended.
+function Kindlearnki:sync_message(text)
+    return tostring(text) .. self:media_hint()
 end
 
 --==========================================================================
@@ -377,6 +396,20 @@ function Kindlearnki:save_setting(key, value)
     end
     settings:saveSetting(key, value)
     settings:flush()
+end
+
+--- Where card media (images) are read from.
+--
+-- Defaults to the plugin's own `koreader/kindlearnki/media/`, which is created
+-- on every start and is reachable over USB.  The `media_dir` setting lets a
+-- user point at a folder they already copy `collection.media` into; it is
+-- never created or written by us.
+-- @treturn string|nil
+function Kindlearnki:media_dir()
+    if not self.paths then
+        return nil
+    end
+    return Paths.media_source(self.paths, self:read_setting("media_dir", ""))
 end
 
 function Kindlearnki:build_client()
@@ -468,39 +501,112 @@ function Kindlearnki:prompt_login(then_sync)
     end
 end
 
---- Reachability probe for the "网络诊断" menu entry.
+--- Confirm, then delete the local card library.
 --
--- Everything is logged stage by stage; the device cannot be debugged from here,
--- so the user runs this once and sends crash.log.
-function Kindlearnki:network_selftest()
-    local ok, Transport = pcall(require, "sync.transport")
-    if not ok then
-        show_message("网络诊断不可用：" .. tostring(Transport))
+-- Separate from 注销本地账户 on purpose: a failed sync is the common reason for
+-- wanting a clean slate, and that must not cost the user their login.
+function Kindlearnki:prompt_delete_library()
+    local ButtonDialog = require("ui/widget/buttondialog")
+    local dialog
+    dialog = ButtonDialog:new{
+        title = _("删除本地卡片库？\n\n登录状态保留，可用于强制云端覆写。"),
+        buttons = {
+            {
+                {
+                    text = _("删除"),
+                    callback = function()
+                        UIManager:close(dialog)
+                        self:delete_library()
+                    end,
+                },
+            },
+            {
+                {
+                    text = _("取消"),
+                    callback = function()
+                        UIManager:close(dialog)
+                    end,
+                },
+            },
+        },
+    }
+    UIManager:show(dialog)
+    return true
+end
+
+--- Drop every local copy of the library, keeping the login.
+function Kindlearnki:delete_library()
+    -- The handle has to go first: removing a file SQLite still has open either
+    -- fails outright or leaves the WAL behind, and the next download would then
+    -- be compared against a stale journal.
+    self:close_collection()
+    local result = Paths.remove_library(self.paths)
+    if #result.failed > 0 then
+        local first = result.failed[1]
+        Log.err("delete library failed:", first.path, tostring(first.error))
+        show_message(_("删除失败：") .. tostring(first.error) .. "\n" .. first.path)
         return true
     end
-
-    collectgarbage("collect")
-    Log.info(string.format("selftest: memory %.1f MB", collectgarbage("count") / 1024))
-    Trace.mark("selftest.start")
-    local done = self:busy(_("正在测试网络…"))
-    local steps = Transport.selftest("sync.ankiweb.net")
-    Trace.mark("selftest.done")
-    done()
-
-    local lines = { _("网络诊断结果：") }
-    local all_ok = true
-    for _, step in ipairs(steps) do
-        lines[#lines + 1] = string.format("%s %s（%s）",
-            step.ok and "✓" or "✗", step.stage, tostring(step.detail))
-        if not step.ok then
-            all_ok = false
-        end
+    if #result.removed == 0 then
+        show_message(_("本地没有卡片库，无需删除。"))
+        return true
     end
-    if all_ok then
-        lines[#lines + 1] = ""
-        lines[#lines + 1] = _("网络与证书校验正常。")
+    show_message(_("本地卡片库已删除。下次同步会从云端重新下载。"))
+    return true
+end
+
+--- Confirm, then forget the account: the key *and* the library.
+--
+-- The library has to go with the key.  Keeping it would mean the next sync
+-- pushes the previous account's cards and review history into whichever
+-- account logs in next.
+function Kindlearnki:prompt_logout_local()
+    local ButtonDialog = require("ui/widget/buttondialog")
+    local dialog
+    dialog = ButtonDialog:new{
+        title = _("注销本地账户？\n\n将删除本机保存的登录信息，并同时删除本地卡片库，"
+            .. "避免旧账户的数据混入新账户。下次同步需要重新登录。"),
+        buttons = {
+            {
+                {
+                    text = _("注销"),
+                    callback = function()
+                        UIManager:close(dialog)
+                        self:logout_local()
+                    end,
+                },
+            },
+            {
+                {
+                    text = _("取消"),
+                    callback = function()
+                        UIManager:close(dialog)
+                    end,
+                },
+            },
+        },
+    }
+    UIManager:show(dialog)
+    return true
+end
+
+--- Drop the key and the library together.
+function Kindlearnki:logout_local()
+    self:close_collection()
+    local result = Paths.remove_library(self.paths)
+    local settings = self:settings()
+    if settings then
+        settings:delSetting("hkey")
+        settings:flush()
     end
-    show_message(table.concat(lines, "\n"))
+    if #result.failed > 0 then
+        local first = result.failed[1]
+        Log.err("logout: library delete failed:", first.path, tostring(first.error))
+        show_message(_("已注销登录，但本地卡片库没删干净：")
+            .. tostring(first.error) .. "\n" .. first.path)
+        return true
+    end
+    show_message(_("已注销本地账户，本地卡片库已删除。下次同步请重新登录。"))
     return true
 end
 
@@ -571,9 +677,9 @@ function Kindlearnki:run_sync()
     end
 
     if result.status == "normal" then
-        show_message(_("同步完成。"))
+        show_message(self:sync_message(_("同步完成。")))
     elseif result.status == "noChanges" then
-        show_message(_("已是最新，无需同步。"))
+        show_message(self:sync_message(_("已是最新，无需同步。")))
     elseif result.status == "fullRequired" then
         self:prompt_full_sync(result.message)
     else
@@ -652,7 +758,7 @@ function Kindlearnki:full_sync(direction)
         show_message(_("整库同步失败：") .. tostring(err))
         return
     end
-    show_message(_("整库同步完成。"))
+    show_message(self:sync_message(_("整库同步完成。")))
 end
 
 function Kindlearnki:onKindlearnkiSync()
@@ -661,11 +767,6 @@ function Kindlearnki:onKindlearnkiSync()
         return true
     end
     self:run_sync()
-    return true
-end
-
-function Kindlearnki:show_diagnostics()
-    Probe.show(self.caps, Kindlearnki.VERSION)
     return true
 end
 

@@ -32,6 +32,7 @@ local InputContainer = require("ui/widget/container/inputcontainer")
 local UIManager = require("ui/uimanager")
 local logger = require("logger")
 
+local DeckList = require("study.decklist")
 local Tokens = require("ui.tokens")
 local Widgets = require("ui.widgets")
 
@@ -47,6 +48,10 @@ local DeckView = InputContainer:extend{
     -- { id, name, depth, counts = { new, learning, review } }.
     decks = nil,
     total = 0,
+    -- `{ new, learning, review }` for the whole library, straight from
+    -- `DeckList.build`.  It is not derivable from `decks`: a parent row already
+    -- counts its children, so summing the rows double-counts nested decks.
+    total_counts = nil,
     date_text = "",
     page = 1,
 
@@ -107,11 +112,14 @@ end
 
 --- Replace the data of an already shown screen (after a sync, say).
 -- Rebuilds the layout and asks for one repaint; no widget is recreated.
-function DeckView:update(decks, total, date_text)
+function DeckView:update(decks, total, date_text, total_counts)
     self.decks = decks or {}
     self.total = tonumber(total) or 0
     if date_text ~= nil then
         self.date_text = tostring(date_text)
+    end
+    if total_counts ~= nil then
+        self.total_counts = total_counts
     end
     self:_layout()
     UIManager:setDirty(self, "ui")
@@ -255,13 +263,7 @@ function DeckView:_layout()
     local total_bottom = total_top + total_metrics.h
 
     --== 新/学/复 拆分（全部牌组的合计）=================================
-    local counts = { new = 0, learning = 0, review = 0 }
-    for _, deck in ipairs(self.decks) do
-        local deck_counts = deck.counts or {}
-        counts.new = counts.new + (tonumber(deck_counts.new) or 0)
-        counts.learning = counts.learning + (tonumber(deck_counts.learning) or 0)
-        counts.review = counts.review + (tonumber(deck_counts.review) or 0)
-    end
+    local counts = DeckList.display_counts(self.decks, self.total_counts)
     local meta_metrics = Widgets.metrics(faces.meta)
     local counts_top = total_bottom + math.floor(gap / 2)
     layout.counts_text = Tokens.counts_text(counts)
