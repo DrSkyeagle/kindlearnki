@@ -1,6 +1,6 @@
 # Kindlearnki
 
-**在 Kindle 上刷 Anki 卡片。** 电子墨水屏看卡、按键评分，进度和手机、电脑上的 Anki 自动对上。
+**在 Kindle 上刷 Anki 卡片。** 电子墨水屏学习，进度同步云端，无缝衔接手机、电脑上的 Anki。
 
 <p align="center">
   <img src="docs/screenshots/study-front.png" width="30%" alt="卡片正面：题干与五个选项">
@@ -73,7 +73,7 @@ tar -xzf /mnt/us/kindlearnki-koplugin-0.3.2.tgz
 3. 登录成功后会自动把整个卡片库下载下来，大约几 MB，看网速；
 4. 回菜单点 **开始复习** → 选牌组，或者「全部牌组一起复习」。
 
-评分四个键：`重来` / `困难` / `记住` / `太简单`，和 Anki 一样。Voyage 可以用侧边翻页键，`×` 退出。
+评分四个键：`重来` / `困难` / `记住` / `太简单`，和 Anki 一样。Voyage 在koreader（no frame模式）下可以用侧边翻页键，`×` 退出。
 
 刷完之后回菜单点一次 **立即同步**，进度推到云端，手机上打开 Anki 就能接着刷。
 
@@ -125,7 +125,7 @@ AnkiWeb 自己支持同步媒体。**这个插件不会去同步，将来也不�
 
 ## 同步会不会和手机打架
 
-不会。同步是双向的：Kindle 上刷的推上去，手机上刷的拉下来。
+不会。同步功能的代码编译自ankidroid，是双向的：Kindle 上刷的推上去，手机上刷的拉下来。
 
 几个你可能会担心的情况：
 
@@ -165,7 +165,7 @@ AnkiWeb 自己支持同步媒体。**这个插件不会去同步，将来也不�
 2. 按上面的[安装](#安装)步骤放进 `kindlearnki.koplugin`。
 3. 第一次启动会自动把旧的卡片库和登录状态复制到新位置，**进度和登录都保留**，旧文件原样留着，想回退随时可以。
 
-小提示：本项目与 [`yizhixiaoheigou/kindle-anki`](https://github.com/yizhixiaoheigou/kindle-anki) 的插件不冲突（目录名不同、数据目录不同），两个可以同时装着对比。
+小提示：本项目与 [`yizhixiaoheigou/kindle-anki`](https://github.com/yizhixiaoheigou/kindle-anki) 的插件不冲突（目录名不同、数据目录不同），这位作者的作品也很好，两个可以同时装着对比。
 
 <details>
 <summary><b>给想改代码的人（点开）</b></summary>
