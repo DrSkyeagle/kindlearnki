@@ -57,4 +57,22 @@ return {
         assert(source:find('load_ui("ui/widget/infomessage")', 1, true),
             "the end-of-round message has no InfoMessage")
     end,
+
+    ["the card screen is told where the media are"] = function()
+        -- MuPDF resolves `<img src="paste-1234.jpg">` only when the widget is
+        -- given a resource directory.  When the chain broke, every image on
+        -- every card rendered as the literal `[image]` placeholder, which looks
+        -- exactly like "this plugin cannot show images".
+        local controller = Helpers.read("study/controller.lua")
+        assert(controller:find("resource_dir = options.media_dir", 1, true),
+            "the card face no longer carries a resource_dir")
+
+        local studyview = Helpers.read("ui/studyview.lua")
+        assert(studyview:find("html_resource_directory = data.resource_dir", 1, true),
+            "the MuPDF widget is built without the media directory")
+
+        local main = Helpers.read("main.lua")
+        assert(main:find("media_dir = self:media_dir()", 1, true),
+            "the deck screen is opened without a media directory")
+    end,
 }

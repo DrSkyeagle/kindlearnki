@@ -115,6 +115,11 @@ content-type: application/octet-stream
 
 ## 5. 媒体（`msync/*`）（待写）
 
+> **0.3.x 范围：不实现。** 媒体靠 USB 手动拷贝到 `koreader/kindlearnki/media/`
+> （`使用说明.md` §4.2）；渲染侧只负责把 `<img src>` 解析到该目录（0.3.1）。
+> Kindle 是只读复习设备，永远不会在设备上产生新媒体，所以将来若接入，也只需要单向下载
+> （`begin` → `mediaChanges` → `downloadFiles`），不需要 `uploadChanges`。
+
 信封多一层 `{"data":…,"err":""}`、`downloadFiles` 回裸 zip、任一文件缺失整批 409、单批 >2.5 MB 截断。
 
 ## 6. 错误映射（待写）

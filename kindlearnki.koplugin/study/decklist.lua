@@ -92,4 +92,36 @@ function DeckList.build(collection, opts)
     }
 end
 
+--- The 新/学/复 line under the big total.
+--
+-- Taken from `build`'s `total_counts` whenever it is available, and *not*
+-- recomputed from the visible rows: a parent deck already counts its children,
+-- so adding every row double-counts each nested deck.  A real library with
+-- 好文章 → 知乎好文章 read "新 519 · 复 185" (707) under a total of 447 for
+-- exactly that reason.
+--
+-- The fallback sums the top-level rows only -- the same rule `build` uses --
+-- and exists for screens assembled from hand-written data (the L2 harness).
+-- @tparam table decks visible rows from `build`
+-- @tparam[opt] table total_counts `{ new, learning, review }` from `build`
+-- @treturn table `{ new, learning, review }`
+function DeckList.display_counts(decks, total_counts)
+    local counts = { new = 0, learning = 0, review = 0 }
+    if type(total_counts) == "table" then
+        for key in pairs(counts) do
+            counts[key] = tonumber(total_counts[key]) or 0
+        end
+        return counts
+    end
+    for _, deck in ipairs(decks or {}) do
+        if (tonumber(deck.depth) or 0) == 0 then
+            local deck_counts = deck.counts or {}
+            for key in pairs(counts) do
+                counts[key] = counts[key] + (tonumber(deck_counts[key]) or 0)
+            end
+        end
+    end
+    return counts
+end
+
 return DeckList

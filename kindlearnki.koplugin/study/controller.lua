@@ -55,9 +55,18 @@ function Controller.show_decks(collection, opts)
     view = DeckView:new{
         decks = data.decks,
         total = data.total,
+        -- The 新/学/复 line cannot be recovered from `decks`: parent rows
+        -- already include their children, so the screen needs the library-wide
+        -- breakdown the data layer computed.
+        total_counts = data.total_counts,
         date_text = data.date_text,
         on_open = function(deck_id)
-            Controller.start_study(collection, deck_id, view)
+            -- `media_dir` travels with the screen: the study view hands it to
+            -- MuPDF so `<img src="paste-1234.jpg">` resolves, and the deck list
+            -- is the only place that knows it.
+            Controller.start_study(collection, deck_id, view, {
+                media_dir = opts.media_dir,
+            })
         end,
         on_menu = function()
             Controller.close(view)
@@ -77,8 +86,69 @@ function Controller.close(view)
     end
 end
 
+--- Build the face table for one card.
+--
+-- Public so the L2 harness and the offline tests can render a card without
+-- opening a session: the returned table is exactly what `ui/studyview.lua`
+-- consumes (`html`, `answer_html`, `css`, `resource_dir`).
+-- @tparam table item `{ notetype, note, card, context }` from `study.session`
+-- @tparam[opt] table options `{ media_dir = <where the card media live> }`
+-- @treturn table
+function Controller.face(item, options)
+    options = options or {}
+    if not item then
+        return { html = "", css = "", resource_dir = options.media_dir }
+    end
+
+    local Render = load_ui("render.template")
+    if not Render then
+        -- No renderer: show the first field so the session is still usable
+        -- for testing the scheduler UI.
+        local first = item.note and item.note.fields[1] or ""
+        return {
+            html = "<div>" .. first .. "</div>",
+            css = "",
+            resource_dir = options.media_dir,
+        }
+    end
+
+    local faces = Render.card_faces(item.notetype, item.note, item.card,
+        item.context)
+    local css = faces.css or (item.notetype and item.notetype.css) or ""
+
+    -- The sanitizer strips class/id (it treats card content as hostile),
+    -- but Anki's own CSS targets `.card` / `.cloze`.  Wrapping *after*
+    -- sanitising gives the stylesheet its hooks without trusting the card.
+    local function wrap(html, extra_class)
+        local classes = "card"
+        if extra_class then
+            classes = classes .. " " .. extra_class
+        end
+        -- Inline styles win over the template's stylesheet in MuPDF; the
+        -- appended `.card { … }` rule alone was not enough to override
+        -- `text-align: center` and the tiny font baked into Anki's CSS.
+        return string.format('<div class="%s" style="%s">%s</div>',
+            classes, Controller.card_style(), html or "")
+    end
+
+    local card_class = "card" .. tostring((item.card and item.card.ord or 0) + 1)
+    return {
+        html = wrap(faces.question_html, card_class),
+        answer_html = wrap(faces.answer_html, card_class),
+        css = css,
+        media = faces.media,
+        -- Where MuPDF resolves a relative `<img src="paste-1234.jpg">` from.
+        -- Without it `ScrollHtmlWidget` opens no archive and *every* image
+        -- turns into MuPDF's `[image]` placeholder, whether the file is on the
+        -- device or not.
+        resource_dir = options.media_dir,
+    }
+end
+
 --- Start a study session for one deck (nil / 1 = all decks).
-function Controller.start_study(collection, deck_id, parent_view)
+-- @tparam[opt] table options `{ media_dir = <where the card media live> }`
+function Controller.start_study(collection, deck_id, parent_view, options)
+    options = options or {}
     -- `parent_view` is the deck list (shown underneath); it is refreshed when
     -- the session ends so its counts are not stale.
     local deck_view = parent_view
@@ -86,7 +156,6 @@ function Controller.start_study(collection, deck_id, parent_view)
     if not StudyView then
         return nil, tostring(load_error)
     end
-    local Render = load_ui("render.template")
 
     local session = Session.new{
         collection = collection,
@@ -95,42 +164,7 @@ function Controller.start_study(collection, deck_id, parent_view)
 
     local view
     local function current_face(item)
-        if not item then
-            return { html = "", css = "" }
-        end
-        if not Render then
-            -- No renderer: show the first field so the session is still usable
-            -- for testing the scheduler UI.
-            local first = item.note and item.note.fields[1] or ""
-            return { html = "<div>" .. first .. "</div>", css = "" }
-        end
-
-        local faces = Render.card_faces(item.notetype, item.note, item.card,
-            item.context)
-        local css = faces.css or (item.notetype and item.notetype.css) or ""
-
-        -- The sanitizer strips class/id (it treats card content as hostile),
-        -- but Anki's own CSS targets `.card` / `.cloze`.  Wrapping *after*
-        -- sanitising gives the stylesheet its hooks without trusting the card.
-        local function wrap(html, extra_class)
-            local classes = "card"
-            if extra_class then
-                classes = classes .. " " .. extra_class
-            end
-            -- Inline styles win over the template's stylesheet in MuPDF; the
-            -- appended `.card { … }` rule alone was not enough to override
-            -- `text-align: center` and the tiny font baked into Anki's CSS.
-            return string.format('<div class="%s" style="%s">%s</div>',
-                classes, Controller.card_style(), html or "")
-        end
-
-        local card_class = "card" .. tostring((item.card.ord or 0) + 1)
-        return {
-            html = wrap(faces.question_html, card_class),
-            answer_html = wrap(faces.answer_html, card_class),
-            css = css,
-            media = faces.media,
-        }
+        return Controller.face(item, options)
     end
 
     local item = session:next()
@@ -156,7 +190,7 @@ function Controller.start_study(collection, deck_id, parent_view)
         end
         local ok, data = pcall(DeckList.build, collection)
         if ok and data then
-            deck_view:update(data.decks, data.total, data.date_text)
+            deck_view:update(data.decks, data.total, data.date_text, data.total_counts)
         end
     end
 

@@ -75,6 +75,7 @@ local deck_view
 deck_view = DeckView:new{
     decks = data.decks,
     total = data.total,
+    total_counts = data.total_counts,
     date_text = data.date_text,
     on_open = function() end,
     on_menu = function() end,
@@ -157,6 +158,7 @@ end
 local decks_page = DeckView:new{
     decks = many,
     total = 25,
+    total_counts = { new = 25, learning = 0, review = 0 },
     date_text = "10月30日 周五",
     on_open = function() end,
     on_menu = function() end,

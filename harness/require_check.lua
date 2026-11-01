@@ -65,7 +65,6 @@ local default_modules = {
     "ui.deckview",
     "ui.studyview",
     "ui.login",
-    "ui.probe",
 }
 
 local modules = { ... }

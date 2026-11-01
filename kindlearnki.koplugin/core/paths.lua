@@ -47,6 +47,34 @@ function Paths.for_koreader()
     return Paths.new(DataStorage:getDataDir(), DataStorage:getSettingsDir())
 end
 
+--- Where the renderer should look for a card's media files.
+--
+-- The default is the plugin's own `media/` directory, which is created on
+-- every start and is visible over USB (`Kindle/koreader/kindlearnki/media/`),
+-- so "copy `collection.media` in there" is the whole setup.
+--
+-- The `media_dir` setting exists for the case where the user would rather
+-- point at a folder they already keep, e.g. `/mnt/us/documents/collection.media`
+-- after a USB copy.  It is read-only for us: we never write or create it, and
+-- an unusable value falls back to the default instead of taking the card down.
+-- @tparam table paths from `Paths.new`
+-- @string[opt] override `media_dir` setting value
+-- @treturn string
+function Paths.media_source(paths, override)
+    assert(type(paths) == "table" and type(paths.media_dir) == "string",
+        "paths from Paths.new are required")
+    local text = tostring(override or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if text == "" then
+        return paths.media_dir
+    end
+    text = trim_trailing_slashes(text)
+    if text == "" then
+        -- The setting was "/" or whitespace: that is not a media folder.
+        return paths.media_dir
+    end
+    return text
+end
+
 local function split_path(path)
     local parts = {}
     for part in tostring(path):gmatch("[^/]+") do
@@ -102,6 +130,52 @@ function Paths.ensure(paths)
         end
     end
     return true
+end
+
+--==========================================================================
+-- The local library
+--==========================================================================
+-- Everything a "delete the local library" has to take with it.  The WAL and
+-- SHM sidecars are part of the database -- deleting the main file alone leaves
+-- a stale journal that SQLite then replays onto the *next* download.  The
+-- `.bak` is the copy the full-sync path leaves behind; keeping it would make
+-- "delete the library" a half-truth, because the next full sync could still be
+-- compared against it.
+
+--- Files that make up the local library, in deletion order.
+-- @tparam table paths from `Paths.new`
+-- @treturn table array of absolute paths (some may not exist)
+function Paths.library_files(paths)
+    assert(type(paths) == "table" and type(paths.collection) == "string",
+        "paths from Paths.new are required")
+    return {
+        paths.collection,
+        paths.collection .. "-wal",
+        paths.collection .. "-shm",
+        paths.collection .. ".bak",
+    }
+end
+
+--- Delete the local library; the settings file (and the hkey) stay untouched.
+-- Missing files are not an error: a second tap of the menu entry, or a device
+-- that never finished its first download, both land here with nothing to do.
+-- @tparam table paths from `Paths.new`
+-- @treturn table `{ removed = {paths}, failed = { {path, error} } }`
+function Paths.remove_library(paths)
+    local result = { removed = {}, failed = {} }
+    for _, path in ipairs(Paths.library_files(paths)) do
+        local handle = io.open(path, "rb")
+        if handle then
+            handle:close()
+            local ok, err = os.remove(path)
+            if ok then
+                result.removed[#result.removed + 1] = path
+            else
+                result.failed[#result.failed + 1] = { path = path, error = err }
+            end
+        end
+    end
+    return result
 end
 
 --==========================================================================

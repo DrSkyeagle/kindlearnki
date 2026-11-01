@@ -1,5 +1,56 @@
 # Changelog
 
+## [0.3.2] — 2026-11-01
+
+### Added
+
+- 菜单新增 **删除卡片库**：删掉本地 `collection.anki2` 及其 `-wal`/`-shm`/`.bak`，
+  保留登录状态；用于卸载前清干净，或同步失败时强制下次从云端整库覆写。二次确认。
+- 菜单新增 **注销本地账户**：删掉本机 hkey **并同时删除本地卡片库**——只删钥匙不删库的话，
+  换号后首次同步会把旧账户的卡片和复习记录合并进新账户。二次确认。
+
+### Changed
+
+- 同步成功的消息统一为「同步完成。媒体文件可自行复制到koreader/kindlearnki/media中。」
+  （三个成功分支都带；路径写死，不再跟随 `media_dir` 设置）。
+- 菜单去掉 **诊断** 和 **网络诊断** 两项，连带删除 `ui/probe.lua` 与 `network_selftest()`。
+  启动时的能力自检保留（只写 `crash.log`，不占菜单）。
+
+### Fixed
+
+- 卡片图片现在真的能显示了：复习页从来没有把媒体目录交给 MuPDF
+  （`ScrollHtmlWidget` 的 `html_resource_directory` 恒为 `nil`），所以即使图片文件就在
+  设备上，每张图也会被渲染成字面的 `[image]`——那是 MuPDF 的缺图占位符，不是"不支持图片"。
+  现在 `study/controller.lua` 把 `resource_dir` 交给渲染层，`main.lua` 用
+  `Kindlearnki:media_dir()` 提供路径（默认 `koreader/kindlearnki/media/`）。
+- **牌组页的「新/学/复」拆分不再把可见行相加**：父牌组本来就算过子牌组，嵌套牌组会被
+  重复计数（真实库上那一行是 707，而大数字和页脚都是 447）。现在直接用 `DeckList.build`
+  算好的全库合计（新增 `DeckList.display_counts`），`新+学+复` 恒等于那个大数字。
+- `sync/protocol.lua` 的 `VERSION` 改为读 `core/version.lua`，不再手抄第二份——发版时漏改
+  会把旧版本号发给 AnkiWeb（这次升级正好踩中，测试先报的错）。
+
+### Docs
+
+- `kindlearnki.koplugin/doc/使用说明.md` 新增 **§4.2 图片与媒体（手动放入）**：Kindle 上的
+  媒体目录路径（设备内 `/mnt/us/koreader/kindlearnki/media/`，连电脑
+  `Kindle/koreader/kindlearnki/media/`）、电脑端 `collection.media` 的三平台路径、复制步骤、
+  成功判据（卡上出现 `[image]` = 还缺文件）、可选的 `media_dir` 设置、以及背景图不显示的说明。
+- 新增 **§4.3 清理与换号**：两个新菜单项各自做什么、会删什么、不会删什么。
+- README 增加"图片：手动把媒体文件放进去"一节，并改掉"媒体需要同步时下载"的错误说法。
+
+### Tests
+
+- 新增 `tests/test_controller_face.lua`（face 交出 `resource_dir`、不再报告缺图）、
+  `test_decklist` 的三条口径用例（拆分等于总数、嵌套不重复计数、以数据层为准）、
+  `test_paths` 的三条删库用例（连带 `-wal`/`-shm`/`.bak`、保留设置、空库是 no-op）与
+  `test_ui_guards` 里的一条接线守卫；离线套件 234 → **248 例，0 失败**。
+- 新增 `harness/media_shot.lua`（L2）：同一张卡拍两遍——接上媒体目录出真图，
+  不接出 MuPDF 的 `[image]`。两张不同才算接线生效（实测 162 KB vs 40 KB）。
+
+### Scope
+
+- 明确不做：媒体联网同步（`msync/*`）、音频/视频渲染。Kindle 是只读复习设备，媒体走 USB 拷贝。
+
 ## [0.3.0] — 2026-10-31
 
 对外发布版本，项目改名为 **kindlearnki**（此前提到的路径与名称按新名显示）。

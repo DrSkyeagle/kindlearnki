@@ -25,13 +25,14 @@ Where the constants come from (see doc/SYNC-SPEC.md §1 for the evidence trail):
 ]]
 
 local json = require("sync.json")
+local Version = require("core.version")
 
 local M = {}
 
---- Wire identity. Kept in sync with `core/version.lua` by hand: version.lua is
---- the release identity, this is what goes on the wire, and tests pin the
---- shape (`anki,<ver> (kindlearnki),koreader`) rather than loose matching.
-M.VERSION = "0.3.0"
+--- Wire identity. Taken from `core/version.lua` rather than typed again: this
+--- string is what goes on the wire, and a hand-copied second literal is how a
+--- release bump silently ships the previous version to AnkiWeb.
+M.VERSION = Version.VERSION
 
 M.ENDPOINT_DEFAULT = "https://sync.ankiweb.net/"
 

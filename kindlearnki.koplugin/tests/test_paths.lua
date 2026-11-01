@@ -100,4 +100,77 @@ return {
         handle:close()
         os.remove(nested .. "/probe.txt")
     end,
+
+    ["media defaults to the plugin's own folder"] = function()
+        local p = Paths.new("/mnt/us/koreader", "/mnt/us/koreader/settings")
+        assert(Paths.media_source(p) == p.media_dir)
+        assert(Paths.media_source(p, "") == p.media_dir)
+        assert(Paths.media_source(p, "   ") == p.media_dir)
+    end,
+
+    ["the media_dir setting wins over the default"] = function()
+        local p = Paths.new("/mnt/us/koreader", "/mnt/us/koreader/settings")
+        assert(Paths.media_source(p, "/mnt/us/documents/collection.media")
+            == "/mnt/us/documents/collection.media")
+        -- Trailing slashes are the difference between `<dir>//a.png` and a
+        -- path MuPDF can resolve, so they are normalised here, not later.
+        assert(Paths.media_source(p, "/mnt/us/documents/collection.media//")
+            == "/mnt/us/documents/collection.media")
+    end,
+
+    ["an unusable media_dir falls back to the default"] = function()
+        local p = Paths.new("/mnt/us/koreader", "/mnt/us/koreader/settings")
+        assert(Paths.media_source(p, "/") == p.media_dir)
+        assert(Paths.media_source(p, "//") == p.media_dir)
+        assert(not pcall(Paths.media_source, nil))
+    end,
+
+    ["remove_library takes the collection, its sidecars and the backup"] = function()
+        local base = Helpers.root .. "/../out/tmp/paths-remove-" .. tostring(os.time())
+            .. "-" .. tostring(math.random(1000, 9999))
+        local p = Paths.new(base, base .. "/settings")
+        assert(Paths.ensure(p))
+        for _, path in ipairs(Paths.library_files(p)) do
+            local handle = assert(io.open(path, "wb"))
+            handle:write("x")
+            handle:close()
+        end
+
+        local result = Paths.remove_library(p)
+        assert(#result.removed == 4, "expected 4 files, removed " .. #result.removed)
+        assert(#result.failed == 0, "unexpected failure: " .. tostring(result.failed[1]))
+        for _, path in ipairs(Paths.library_files(p)) do
+            assert(io.open(path, "rb") == nil, "still on disk: " .. path)
+        end
+    end,
+
+    ["remove_library keeps the login"] = function()
+        -- The whole point of the menu entry: a clean library without losing the
+        -- hkey, so the next sync is a plain full download.
+        local base = Helpers.root .. "/../out/tmp/paths-keepkey-" .. tostring(os.time())
+            .. "-" .. tostring(math.random(1000, 9999))
+        local p = Paths.new(base, base .. "/settings")
+        assert(Paths.ensure(p))
+        assert(Paths.mkdir_p(base .. "/settings"))
+        local handle = assert(io.open(p.collection, "wb"))
+        handle:write("x")
+        handle:close()
+        handle = assert(io.open(p.settings_file, "wb"))
+        handle:write('return { hkey = "keep-me" }')
+        handle:close()
+
+        assert(#Paths.remove_library(p).removed == 1)
+        local settings = assert(io.open(p.settings_file, "rb"), "settings were deleted")
+        assert(settings:read("*a"):find("keep-me", 1, true), "the hkey was lost")
+        settings:close()
+    end,
+
+    ["remove_library on a fresh install is a no-op"] = function()
+        local base = Helpers.root .. "/../out/tmp/paths-empty-" .. tostring(os.time())
+            .. "-" .. tostring(math.random(1000, 9999))
+        local p = Paths.new(base, base .. "/settings")
+        local result = Paths.remove_library(p)
+        assert(#result.removed == 0, "removed something that never existed")
+        assert(#result.failed == 0, "a missing file must not be an error")
+    end,
 }

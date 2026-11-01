@@ -76,4 +76,32 @@ return {
         local result = DeckList.build(make_collection(), { now = 1000 })
         assert(result.total == 2, "expected 1 new + 1 review, got " .. result.total)
     end,
+
+    ["the breakdown adds up to the big total"] = function()
+        local result = DeckList.build(make_collection(), { now = 1000 })
+        local counts = DeckList.display_counts(result.decks, result.total_counts)
+        local sum = counts.new + counts.learning + counts.review
+        assert(sum == result.total,
+            string.format("新%d+学%d+复%d = %d but the total reads %d",
+                counts.new, counts.learning, counts.review, sum, result.total))
+    end,
+
+    ["nested decks are not counted twice"] = function()
+        -- 机器学习 already counts 深度学习 (and its hidden CNN subdeck), so
+        -- summing the visible rows would report 2 new cards where the library
+        -- has 1.  The fallback has to use the top-level rows only.
+        local result = DeckList.build(make_collection(), { now = 1000 })
+        local counts = DeckList.display_counts(result.decks)
+        assert(counts.new == 1, "the parent and its child were both counted: "
+            .. tostring(counts.new))
+        assert(counts.review == 1, "the review card was lost: " .. tostring(counts.review))
+    end,
+
+    ["the data layer's breakdown wins over the rows"] = function()
+        local result = DeckList.build(make_collection(), { now = 1000 })
+        local counts = DeckList.display_counts(result.decks,
+            { new = 7, learning = 1, review = 3 })
+        assert(counts.new == 7 and counts.learning == 1 and counts.review == 3,
+            "the caller's breakdown was recomputed from the rows")
+    end,
 }
