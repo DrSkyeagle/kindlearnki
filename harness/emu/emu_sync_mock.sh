@@ -10,10 +10,16 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=env.sh
 source "$here/env.sh"
 
-FIXTURE=${FIXTURE:-/tmp/guest-coll.anki2}
+FIXTURE=${FIXTURE:-$HOST_REPO/out/guest-coll.anki2}
 MOCK_LOG=${MOCK_LOG:-/tmp/guest-mock.jsonl}
 PORT=${PORT:-9123}
 MODE=${MODE:-structural}
+
+# A missing fixture used to be piped as empty output, which truncated the guest
+# collection to 0 bytes and made the next steps look like a plugin bug.
+if [ ! -s "$FIXTURE" ]; then
+    die "fixture '$FIXTURE' is missing; point FIXTURE at a collection with pending rows (usn = -1)"
+fi
 
 log "stopping KOReader in the guest"
 guest_ssh 'pkill -f "[r]eader.lua" >/dev/null 2>&1; sleep 2; true' || true
