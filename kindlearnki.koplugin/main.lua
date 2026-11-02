@@ -145,6 +145,13 @@ function Kindlearnki:init()
         if not self.caps.ok then
             Log.err("host is missing capabilities:", table.concat(self.caps.missing, ","))
         end
+        -- The Voyage rocker only reports while deviced has the fsr keypad
+        -- switched on, and KOReader does that itself only in its no-framework
+        -- launch mode.  Switching it on here too makes the same bindings work
+        -- when the stock framework is still running (no-op off Kindle).
+        pcall(function()
+            require("core.pagepress").ensure()
+        end)
     end)
     if not ok then
         Log.err("init failed:", err)

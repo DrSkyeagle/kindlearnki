@@ -51,6 +51,7 @@ local VerticalGroup = require("ui/widget/verticalgroup")
 local logger = require("logger")
 
 local Tokens = require("ui.tokens")
+local PagePress = require("core.pagepress")
 
 local Screen = Device.screen
 
@@ -132,8 +133,15 @@ function StudyView:init()
     self.body_page_count = 1
     self.scroll_widget = nil
 
-    if Device:hasKeys() and Device.input then
-        local Input = Device.input
+    -- The rocker only reports while deviced has the fsr keypad switched on, and
+    -- KOReader flips that switch itself only in its no-framework launch mode.
+    -- Do it here as well, otherwise the buttons are dead whenever the stock
+    -- framework is still running -- the bindings below are installed either way,
+    -- there are just no events to deliver.
+    PagePress.ensure()
+
+    if Device.input then
+        local group = Device.input.group or {}
         --[[ PagePress is the card's own pager, not the review flow.
 
         These decks contain cards several screens tall, and scrolling does not
@@ -142,9 +150,9 @@ function StudyView:init()
         layout does.  PgBack is not "back" on a Voyage -- there is no Back key
         there -- so neither key is bound to Close; exiting is the title-bar ×. ]]
         self.key_events = {
-            PageForward = { { Input.group.PgFwd }, event = "PageForward" },
-            PageBackward = { { Input.group.PgBack }, event = "PageBackward" },
-            Close = { { Input.group.Back }, event = "Close" },
+            PageForward = { { group.PgFwd }, event = "PageForward" },
+            PageBackward = { { group.PgBack }, event = "PageBackward" },
+            Close = { { group.Back }, event = "Close" },
         }
     end
 

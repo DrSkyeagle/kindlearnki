@@ -35,6 +35,7 @@ local logger = require("logger")
 local DeckList = require("study.decklist")
 local Tokens = require("ui.tokens")
 local Widgets = require("ui.widgets")
+local PagePress = require("core.pagepress")
 
 local Screen = Device.screen
 
@@ -93,7 +94,11 @@ function DeckView:init()
         }
     end
 
-    if Device:hasKeys() and Device.input then
+    -- Same switch the study screen flips: without it the rocker emits nothing
+    -- when KOReader runs on top of the stock framework (core/pagepress.lua).
+    PagePress.ensure()
+
+    if Device.input then
         -- Voyage has no Back key; Kindles with a keyboard and the emulator do.
         -- A binding that never matches costs nothing.
         local group = Device.input.group or {}

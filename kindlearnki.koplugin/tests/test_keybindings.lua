@@ -11,8 +11,8 @@ local Helpers = require("helpers")
 return {
     ["PagePress forwards and backwards to the body pager"] = function()
         local source = Helpers.read("ui/studyview.lua")
-        assert(source:find("Input.group.PgFwd", 1, true), "PgFwd is not bound")
-        assert(source:find("Input.group.PgBack", 1, true), "PgBack is not bound")
+        assert(source:find("group.PgFwd", 1, true), "PgFwd is not bound")
+        assert(source:find("group.PgBack", 1, true), "PgBack is not bound")
         assert(source:find('event = "PageForward"', 1, true),
             "PgFwd does not emit PageForward")
         assert(source:find('event = "PageBackward"', 1, true),
@@ -21,6 +21,19 @@ return {
         assert(source:find("function StudyView:onPageBackward", 1, true))
         assert(source:find("previous_body_page", 1, true),
             "backward paging is not implemented")
+    end,
+
+    ["both screens switch the rocker on for a running framework"] = function()
+        -- KOReader only enables deviced's fsr keypad in its no-framework launch
+        -- mode; on top of the stock framework the bindings exist but no key
+        -- event ever arrives.  Both screens have to ask for it themselves.
+        for _, file in ipairs{ "ui/studyview.lua", "ui/deckview.lua" } do
+            local source = Helpers.read(file)
+            assert(source:find("PagePress.ensure()", 1, true),
+                file .. " never enables the PagePress rocker")
+            assert(not source:find("Device:hasKeys() and Device.input", 1, true),
+                file .. " still gates its key bindings on hasKeys()")
+        end
     end,
 
     ["the review flow is no longer bound to the page keys"] = function()
@@ -37,7 +50,7 @@ return {
         -- be treated as "back": Voyage has no Back key, so the title-bar × is
         -- the exit.  The × comes from TitleBar's close_callback.
         local pgback_as_close = source:find(
-            'PageBackward = { { Input.group.PgBack }, event = "Close" }', 1, true)
+            'PageBackward = { { group.PgBack }, event = "Close" }', 1, true)
         assert(pgback_as_close == nil, "PgBack is bound to Close")
         assert(source:find("close_callback", 1, true),
             "the title-bar close button disappeared")

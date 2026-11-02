@@ -48,7 +48,7 @@ for _, item in ipairs(menu_items.kindlearnki.sub_item_table) do
     labels[#labels + 1] = item.text
 end
 assert(#labels >= 4, "expected at least 4 submenu items, got " .. #labels)
-for _, expected in ipairs({ "开始复习", "立即同步", "诊断", "网络诊断" }) do
+for _, expected in ipairs({ "开始复习", "立即同步", "删除卡片库", "注销本地账户", "关于" }) do
     local found = false
     for _, label in ipairs(labels) do
         if label:find(expected, 1, true) then

@@ -37,6 +37,7 @@ local default_modules = {
     "core.log",
     "core.paths",
     "core.capabilities",
+    "core.pagepress",
     "core.trace",
     "proto.pb",
     "proto.encode",

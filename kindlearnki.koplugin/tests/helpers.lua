@@ -23,4 +23,19 @@ function Helpers.contains(relative, needle)
     return Helpers.read(relative):find(needle, 1, true) ~= nil
 end
 
+--- Require a module with a clean `package.loaded` entry.
+--
+-- `require` caches the first result for the whole process, so a case that ran
+-- earlier would decide how a later case sees a module.  Testing state machines
+-- (core.pagepress caches its status) needs a fresh copy per case.
+function Helpers.fresh(name)
+    package.loaded[name] = nil
+    local ok, module = pcall(require, name)
+    if not ok then
+        package.loaded[name] = nil
+        error(module, 2)
+    end
+    return module
+end
+
 return Helpers

@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.3.3] — 2026-11-02
+
+### Fixed
+
+- **实体翻页键在「框架还在跑」的启动方式下完全没反应**（PagePress 石沉大海）。
+  Kindle 的驱动只在 `com.lab126.deviced` 的 `fsrkeypadEnable` 为 1 时，才把
+  `/dev/input/event2`（`fsr_keypad`，键码 104 / 109）的事件送进用户空间；KOReader 只在
+  `STOP_FRAMEWORK=yes`（no-framework / 用 KUAL 停了框架）时才打开这个开关
+  （`frontend/device/kindle/device.lua` 的 `KindleVoyage:init` 拿 `frameworkStopped()` 的 lipc 句柄，
+  普通启动时拿到的是 `nil`）。于是开关一直是 0，插件绑上的 `PgFwd` / `PgBack` 永远收不到按键。
+  新增 `core/pagepress.lua`：启动时（`main.lua`）、牌组页与复习页打开时各调一次
+  `PagePress.ensure()`，用 lipc（`com.lab126.kaf`）读
+  `fsrkeypadEnable` / `fsrkeypadPrevEnable` / `fsrkeypadNextEnable`，把不是 1 的置 1，
+  并写一行 `page buttons: enabled deviced keypad (0/1/1 -> 1/1/1)`；已经打开就什么都不做；
+  没有 fsr keypad 的机型（Oasis 等）不告警、直接跳过；非 Kindle 机器不碰 lipc。
+- 去掉 `Device:hasKeys()` 门禁：`hasKeys` 只说明设备有实体键，不说明按键会送到我们这里。
+  现在按 `Device.input.group` 里有没有 `PgFwd` / `PgBack` 决定是否绑定。
+
+### Tests
+
+- 新增 `tests/test_pagepress.lua`（8 例：`0/0/0 -> 1/1/1`、已开时零写入、`lipc.init` 返回 nil、
+  `set` 抛错、无 fsr keypad、非 Kindle、缺 `liblipclua`、`available()` 只认 Voyage）；
+  `tests/test_keybindings.lua` 增加「两个界面都会替运行中的框架打开开关」。
+  离线套件 248 → **259 例，0 失败**。
+
+### Verified
+
+- 固件模拟器（Kindle Voyage 5.13.6 + KOReader v2026.07.1，框架在跑、`STOP_FRAMEWORK` 未设，
+  即用户遇到的那种启动方式）：插件加载前 `lipc-get-prop com.lab126.deviced fsrkeypadEnable` = 0；
+  加载后日志出现 `page buttons: enabled deviced keypad (0/1/1 -> 1/1/1)`，属性读到 1；
+  把属性强行置回 0，deviced 十秒内不自愈，打开牌组页（`DeckView:init`）后属性回到 1；
+  复习页照常打开。真机（Kindle Voyage）待验：这点只能靠手指按一下 PagePress 确认。
+
 ## [0.3.2] — 2026-11-01
 
 ### Added
