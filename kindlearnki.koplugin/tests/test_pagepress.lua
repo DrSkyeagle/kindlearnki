@@ -58,9 +58,78 @@ return {
         assert(#lipc.calls.sets == 3, "expected 3 property writes, got " .. #lipc.calls.sets)
         assert(lipc.calls.sets[1] == "com.lab126.deviced/fsrkeypadEnable=1",
             "wrote " .. tostring(lipc.calls.sets[1]))
-        assert(lipc.calls.init_ids[1] == "com.lab126.kaf",
+        assert(lipc.calls.init_ids[1] == PagePress.CLIENT_ID,
             "lipc was opened as " .. tostring(lipc.calls.init_ids[1]))
+        assert(PagePress.CLIENT_ID ~= "com.lab126.kaf",
+            "the KAF id belongs to the framework and cannot be opened next to it")
         assert(lipc.calls.closed == 1, "lipc handle was not closed")
+    end,
+
+    ["the framework's own KAF id is only a fallback"] = function()
+        -- 0.3.3 opened "com.lab126.kaf" and failed on a real Voyage, where the
+        -- running framework owns that id.  The plugin's own id is opened first;
+        -- KAF is retried in case a no-framework session made it free.
+        local ids = {}
+        local values = { fsrkeypadEnable = 0, fsrkeypadPrevEnable = 1, fsrkeypadNextEnable = 1 }
+        local lipc = {
+            init = function(id)
+                ids[#ids + 1] = id
+                if id == "com.lab126.kaf" then
+                    return {
+                        get_int_property = function(_, _, name) return values[name] end,
+                        set_int_property = function(_, _, name, value) values[name] = value end,
+                        close = function() end,
+                    }
+                end
+                return nil
+            end,
+        }
+        local PagePress = Helpers.fresh("core.pagepress")
+        local ok, info = PagePress.ensure{ device = voyage, lipc = lipc }
+
+        assert(ok, "ensure() should succeed on the fallback id")
+        assert(info.client == "com.lab126.kaf", "client = " .. tostring(info.client))
+        assert(#ids == 2 and ids[1] == PagePress.CLIENT_ID and ids[2] == "com.lab126.kaf",
+            "tried " .. table.concat(ids, ", "))
+        assert(info.changed and info.before == "0/1/1" and info.after == "1/1/1",
+            "before/after = " .. tostring(info.before) .. " -> " .. tostring(info.after))
+    end,
+
+    ["no client id at all falls back to the lipc-set-prop binaries"] = function()
+        -- Some firmware refuses every id from a plugin process.  The helper
+        -- binaries talk to the same bus without claiming one.
+        local values = { fsrkeypadEnable = 0, fsrkeypadPrevEnable = 1, fsrkeypadNextEnable = 1 }
+        local shell = {
+            get = function(name) return values[name] end,
+            set = function(name) values[name] = 1 return true end,
+        }
+        local PagePress = Helpers.fresh("core.pagepress")
+        local ok, info = PagePress.ensure{
+            device = voyage,
+            lipc = { init = function() return nil end },
+            shell = shell,
+        }
+
+        assert(ok, "the shell fallback should still switch the keypad on")
+        assert(info.transport == "shell", "transport = " .. tostring(info.transport))
+        assert(info.changed and info.before == "0/1/1" and info.after == "1/1/1",
+            "before/after = " .. tostring(info.before) .. " -> " .. tostring(info.after))
+    end,
+
+    ["binary fallback that cannot reach deviced reports failure"] = function()
+        local PagePress = Helpers.fresh("core.pagepress")
+        local ok, info = PagePress.ensure{
+            device = voyage,
+            lipc = { init = function() return nil end },
+            shell = {
+                get = function() return nil end,
+                set = function() return false end,
+            },
+        }
+
+        assert(not ok)
+        assert(info.supported == false, "nothing was readable")
+        assert(info.transport == "shell")
     end,
 
     ["an already enabled keypad is left alone"] = function()
@@ -126,10 +195,14 @@ return {
     ["a lipc handle that cannot be opened is handled"] = function()
         local lipc = { init = function() return nil end }
         local PagePress = Helpers.fresh("core.pagepress")
-        local ok, info = PagePress.ensure{ device = voyage, lipc = lipc }
+        local ok, info = PagePress.ensure{
+            device = voyage,
+            lipc = lipc,
+            shell = { get = function() return nil end, set = function() return false end },
+        }
 
         assert(not ok)
-        assert(info.handle == false)
+        assert(info.transport == "shell", "transport = " .. tostring(info.transport))
     end,
 
     ["properties deviced rejects do not take the plugin down"] = function()
@@ -163,9 +236,13 @@ return {
         local lipc = { init = function() return nil end }
         local dev = { model = "KindleVoyage", isKindle = true, framework_lipc_handle = {} }
         local PagePress = Helpers.fresh("core.pagepress")
-        local ok, info = PagePress.ensure{ device = dev, lipc = lipc }
+        local ok, info = PagePress.ensure{
+            device = dev,
+            lipc = lipc,
+            shell = { get = function() return nil end, set = function() return false end },
+        }
 
         assert(ok, "KOReader already enabled the keypad; ensure() must not fail")
-        assert(info.handle == false, "the failed handle should still be recorded")
+        assert(info.transport == "shell", "transport = " .. tostring(info.transport))
     end,
 }

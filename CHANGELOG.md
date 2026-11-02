@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.3.4] — 2026-11-02
+
+### Fixed
+
+- **0.3.3 的 PagePress 修复在真机上没生效**：真日志是
+  `WARN kindlearnki: page buttons: could not open a lipc handle`。
+  原因：0.3.3 用 `lipc.init("com.lab126.kaf")` 开句柄，而这正是 stock 框架自己的
+  LIPC client id —— 框架在跑时它已经被占用，插件拿不到句柄（模拟器里 harness 停掉了
+  `lab126_gui`，id 空着，所以一直是绿的；KOReader 自己也只在 `STOP_FRAMEWORK=yes` 时才用这个 id，
+  其余场合都用 `com.github.koreader.*`）。
+  现在按 KOReader 的做法先开插件自己的 id `com.github.koreader.kindlearnki`，
+  失败才回退 `com.lab126.kaf`（给 no-framework 模式留后路）。
+- **再兜一层**：两个 id 都开不出来时，退回 `lipc-get-prop` / `lipc-set-prop` 命令行工具
+  （同一根 LIPC 总线，不需要 client id），成功时日志写
+  `page buttons: enabled deviced keypad via lipc-set-prop (0/1/1 -> 1/1/1)`。
+  两条路都不通才 `WARN page buttons: could not reach com.lab126.deviced`。
+- 测试：`tests/test_pagepress.lua` 从 9 例加到 12 例，钉住「先用自己的 id」、
+  「KAF 只作兜底」、「无句柄时走命令行」、「命令行也失败要报错」；离线套件 262 passed。
+
 ## [0.3.3] — 2026-11-02
 
 ### Fixed

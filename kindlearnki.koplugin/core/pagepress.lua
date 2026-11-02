@@ -17,8 +17,8 @@ installed while the rocker does nothing at all.
 work in both launch modes.  It is a no-op off Kindle, when liblipc is missing,
 and when the values are already 1.
 
-The module takes an optional environment (`device`, `lipc`) so unit tests can
-exercise it without KOReader.
+The module takes an optional environment (`device`, `lipc`, `shell`) so unit
+tests can exercise it without KOReader.
 ]]
 
 local Log = require("core.log")
@@ -26,6 +26,17 @@ local Log = require("core.log")
 local PagePress = {}
 
 PagePress.SERVICE = "com.lab126.deviced"
+
+-- LIPC only lets one process own a client id, and the stock KAF process owns
+-- `com.lab126.kaf` for as long as the framework is up.  Opening *that* id on
+-- top of a running framework therefore fails on the device (0.3.3 did exactly
+-- that and nothing happened on a real Voyage), while it works in an emulator
+-- whose harness has stopped lab126_gui.  KOReader's own Kindle port opens
+-- `com.github.koreader.*` ids for everything it does next to a live framework,
+-- so do the same and keep the KAF id as a last resort for the no-framework
+-- launch.
+PagePress.CLIENT_ID = "com.github.koreader.kindlearnki"
+PagePress.KAF_CLIENT_ID = "com.lab126.kaf"
 
 PagePress.PROPERTIES = {
     "fsrkeypadEnable",
@@ -67,6 +78,35 @@ local function set_int(handle, name)
     return (pcall(handle.set_int_property, handle, PagePress.SERVICE, name, 1))
 end
 
+-- The helper binaries speak to the same LIPC bus without claiming a client id,
+-- so they still work on firmware that refuses every id from a plugin process.
+local function shell_get(name)
+    local pipe = io.popen(string.format("lipc-get-prop %s %s 2>/dev/null", PagePress.SERVICE, name), "r")
+    if not pipe then
+        return nil
+    end
+    local output = pipe:read("*a")
+    pipe:close()
+    return tonumber(tostring(output or ""):match("^%s*(-?%d+)"))
+end
+
+local function shell_set(name)
+    local status = os.execute(string.format(
+        "lipc-set-prop %s %s 1 >/dev/null 2>&1", PagePress.SERVICE, name))
+    -- LuaJIT returns the exit status (0 == success); keep a boolean path too.
+    return status == true or status == 0
+end
+
+local function open_lipc(lipc)
+    for _, id in ipairs({ PagePress.CLIENT_ID, PagePress.KAF_CLIENT_ID }) do
+        local ok, handle = pcall(lipc.init, id)
+        if ok and handle then
+            return handle, id
+        end
+    end
+    return nil
+end
+
 local function describe(state)
     local parts = {}
     for i, name in ipairs(PagePress.PROPERTIES) do
@@ -81,7 +121,7 @@ end
 -- Cheap enough to call from every screen that binds PagePress: it is four lipc
 -- property operations and they are idempotent.
 --
--- @tparam[opt] table env `{ device = <KOReader device>, lipc = <liblipclua> }`
+-- @tparam[opt] table env `{ device = <KOReader device>, lipc = <liblipclua>, shell = { get, set } }`
 -- @treturn boolean ok  true when the keypad is (or already was) enabled
 -- @treturn table|nil info  see `PagePress.last`
 function PagePress.ensure(env)
@@ -108,28 +148,30 @@ function PagePress.ensure(env)
         return false, PagePress.last
     end
 
-    local handle
-    do
-        local ok, result = pcall(lipc.init, "com.lab126.kaf")
-        if ok and result then
-            handle = result
+    local handle, client_id = open_lipc(lipc)
+
+    local transport
+    local get, set
+    if handle then
+        transport = "lipc"
+        get = function(name) return get_int(handle, name) end
+        set = function(name) return set_int(handle, name) end
+        if client_id ~= PagePress.CLIENT_ID then
+            Log.dbg("page buttons: lipc opened as " .. client_id .. " (own id refused)")
         end
-    end
-    if not handle then
-        PagePress.last = { on_kindle = true, lipc = true, handle = false }
-        if dev.framework_lipc_handle ~= nil then
-            -- No-framework launch: KOReader opened the switch itself in
-            -- KindleVoyage:init, so a missing handle of our own is not news.
-            Log.dbg("page buttons: no lipc handle, KOReader switched the keypad on already")
-            return true, PagePress.last
+    else
+        local sh = env.shell
+        if sh == nil then
+            sh = { get = shell_get, set = shell_set }
         end
-        Log.warn("page buttons: could not open a lipc handle, cannot enable the PagePress rocker")
-        return false, PagePress.last
+        transport = "shell"
+        get = sh.get
+        set = sh.set
     end
 
     local before = {}
     for i, name in ipairs(PagePress.PROPERTIES) do
-        before[i] = get_int(handle, name)
+        before[i] = get(name)
     end
 
     local after = {}
@@ -138,7 +180,7 @@ function PagePress.ensure(env)
     for i, name in ipairs(PagePress.PROPERTIES) do
         if before[i] == 1 then
             after[i] = 1
-        elseif set_int(handle, name) then
+        elseif set(name) then
             after[i] = 1
             changed = true
         else
@@ -147,7 +189,9 @@ function PagePress.ensure(env)
         end
     end
 
-    pcall(handle.close, handle)
+    if handle then
+        pcall(handle.close, handle)
+    end
 
     -- A Kindle without the fsr keypad (Paperwhite, Basic, ...) does not register
     -- the properties at all: reading them yields nil and writing them raises.
@@ -162,6 +206,8 @@ function PagePress.ensure(env)
     local info = {
         on_kindle = true,
         lipc = true,
+        transport = transport,
+        client = client_id,
         before = describe(before),
         after = describe(after),
         changed = changed,
@@ -170,16 +216,28 @@ function PagePress.ensure(env)
     PagePress.last = info
 
     if not known then
+        if transport == "shell" then
+            -- Neither a client id nor the helper binaries reached deviced: that
+            -- is a real problem on the one model this feature exists for.
+            if dev.framework_lipc_handle ~= nil then
+                Log.dbg("page buttons: no handle, KOReader switched the keypad on already")
+                return true, info
+            end
+            Log.warn("page buttons: could not reach com.lab126.deviced, cannot enable the PagePress rocker")
+            return false, info
+        end
         Log.dbg("page buttons: this Kindle has no deviced fsr keypad")
         return false, info
     elseif failed then
         Log.warn("page buttons: deviced did not accept every property (" ..
-            info.before .. " -> " .. info.after .. ")")
+            info.before .. " -> " .. info.after .. ") via " .. transport)
         return false, info
     elseif changed then
+        local how = transport == "lipc" and "" or " via lipc-set-prop"
         -- Once per launch at info level; the log is how a key report gets
         -- diagnosed without shell access.
-        Log.info("page buttons: enabled deviced keypad (" .. info.before .. " -> " .. info.after .. ")")
+        Log.info("page buttons: enabled deviced keypad" .. how ..
+            " (" .. info.before .. " -> " .. info.after .. ")")
     else
         Log.dbg("page buttons: deviced keypad already enabled (" .. info.after .. ")")
     end

@@ -10,7 +10,7 @@
 
 return {
     PRODUCT = "Kindlearnki",
-    VERSION = "0.3.3",
+    VERSION = "0.3.4",
     MIN_KOREADER = { 2026, 7, 1 },
 }
 

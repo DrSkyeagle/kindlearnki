@@ -6,10 +6,11 @@ Runtime smoke test for the plugin entry point.
       xvfb-run -a ./luajit /mnt/d/ankindle/harness/smoke_main.lua
 
 Loads `main.lua` the way KOReader does, instantiates it, and then **calls the
-menu actions that touch the UI and the network**.  Static checks cannot see a
+entry points that touch the UI and the network**.  Static checks cannot see a
 missing `require` that only fails when a method runs -- the device log read
 "main.lua:345: attempt to index global 'UIManager' (a nil value)" from inside
-`busy()` -- so this harness exercises `network_selftest` for real.
+`busy()` -- so this harness builds the real sync client and then reopens the
+collection from a fresh data directory.
 ]]
 
 local plugin_dir = os.getenv("PLUGIN_DIR") or "/mnt/d/ankindle/kindlearnki.koplugin"
@@ -46,15 +47,20 @@ assert(ok_init, "init() raised: " .. tostring(init_error))
 print("SMOKE init ok; caps=" .. tostring(instance.caps and instance.caps.summary))
 
 local ok, result = xpcall(function()
-    return instance:network_selftest()
+    -- `network_selftest` lived in the diagnostics menu that 0.3.2 removed.
+    -- Building the real sync client is the closest surviving path: it loads
+    -- sync.client/transport and reads the settings the sync flow depends on.
+    local client = instance:build_client()
+    assert(client, "build_client returned nothing")
+    return client.endpoint or "client built"
 end, debug.traceback)
 
 if not ok then
-    print("SMOKE-FAIL network_selftest: " .. tostring(result))
+    print("SMOKE-FAIL build_client: " .. tostring(result))
     os.exit(1)
 end
 
-print("SMOKE-OK network_selftest returned " .. tostring(result))
+print("SMOKE-OK build_client returned " .. tostring(result))
 
 -- The device failure was `ljsqlite3[cantopen]`: the plugin data directory did
 -- not exist on a fresh install.  Reproduce that situation here (a brand new
