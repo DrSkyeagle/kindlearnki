@@ -3,8 +3,8 @@
 **在 Kindle 上刷 Anki 卡片。** 电子墨水屏学习，进度同步云端，无缝衔接手机、电脑上的 Anki。
 
 <p align="center">
-  <img src="docs/screenshots/study-front.png" width="30%" alt="卡片正面：题干与五个选项">
-  <img src="docs/screenshots/study-answer.png" width="30%" alt="同一张卡翻面：正确答案、AI 助记和四个评分键">
+  <img src="docs/screenshots/study-front.png" width="30%" alt="卡片正面：题干">
+  <img src="docs/screenshots/study-answer.png" width="30%" alt="同一张卡翻面：正文与四个评分键">
   <img src="docs/screenshots/decklist.png" width="30%" alt="牌组列表与今天要背的总数">
 </p>
 
@@ -39,7 +39,7 @@
 
 **第 1 步 · 下载**
 
-去 [Releases](https://github.com/DrSkyeagle/kindlearnki/releases/latest) 下 `kindlearnki-koplugin-0.3.4.zip`，或者 `.tgz`。两个内容一模一样，zip 是给电脑解压用的，tgz 是给 `kterm` 直接解压用的。
+去 [Releases](https://github.com/DrSkyeagle/kindlearnki/releases/latest) 下 `kindlearnki-koplugin-0.3.5.zip`，或者 `.tgz`。两个内容一模一样，zip 是给电脑解压用的，tgz 是给 `kterm` 直接解压用的。
 
 **第 2 步 · 放进插件目录**
 
@@ -53,7 +53,7 @@
 
 ```bash
 cd /mnt/us/koreader/plugins
-tar -xzf /mnt/us/kindlearnki-koplugin-0.3.4.tgz
+tar -xzf /mnt/us/kindlearnki-koplugin-0.3.5.tgz
 ```
 
 放对了的样子：`koreader/plugins/kindlearnki.koplugin/main.lua` —— 也就是说，点进 `kindlearnki.koplugin` 这一层，能直接看到 `main.lua`。
