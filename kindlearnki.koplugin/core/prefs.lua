@@ -22,12 +22,23 @@ Prefs.DEFAULTS = {
     -- same vertical line; the setting exists because that line is a taste, not
     -- a fact.
     study_margin = Tokens.space.margin,
+
+    -- "显示缩放": percentage applied to the card's base font size.  This is the
+    -- AnkiDroid setting of the same name; 100 keeps the size the panel was
+    -- tuned for.
+    card_zoom = 100,
+
+    -- "图片缩放": percentage applied to an image's natural size.  100 is what
+    -- the card would look like without the setting (MuPDF's own 0.75 scale).
+    image_zoom = 100,
 }
 
 --- Accepted range per key.  Out-of-range values are clamped, never rejected:
 --- a settings file edited by hand must not be able to push the card off screen.
 Prefs.LIMITS = {
     study_margin = { min = 0, max = 40 },
+    card_zoom = { min = 50, max = 200 },
+    image_zoom = { min = 50, max = 200 },
 }
 
 local store = nil

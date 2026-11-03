@@ -433,6 +433,131 @@ function Tokens.sanitize_style_attr(declarations)
     return Tokens.tidy_declarations(css)
 end
 
+--- Scale a base font size by a percentage, keeping it readable.
+-- The card's base size is already clamped for the panel (see `card_font_px`);
+-- this only applies the reader's "显示缩放" on top of it.  The floor is the
+-- smallest size MuPDF still lays out with sane line spacing on a 300 dpi
+-- panel, the ceiling keeps one Chinese glyph inside a third of the width.
+function Tokens.scaled_font_px(base, percent)
+    base = tonumber(base) or 0
+    percent = tonumber(percent) or 100
+    if base <= 0 then
+        return base
+    end
+    local px = math.floor(base * percent / 100 + 0.5)
+    if px < 12 then
+        px = 12
+    elseif px > 96 then
+        px = 96
+    end
+    return px
+end
+
+--- How wide MuPDF draws one image pixel at the default page scale.
+--
+-- Measured on the firmware build (KOReader v2026.07.1, 1072 px panel): a 600 px
+-- wide PNG occupies 450 px, a 1200 px wide one occupies 900 px.  MuPDF lays
+-- HTML out at 72 dpi and treats image pixels as 96 dpi.  CSS `px`, on the other
+-- hand, are device pixels: `img { width: 600px }` really is 600 px wide.  So the
+-- width we ask for is `natural * 0.75 * zoom`.
+local IMAGE_PX_SCALE = 0.75
+
+local function percent_decode(name)
+    return (name:gsub("%%(%x%x)", function(hex)
+        return string.char(tonumber(hex, 16))
+    end))
+end
+
+--- Position of the `>` that closes the tag starting at `start`.
+-- Quotes are honoured, so `alt="a > b"` does not end the tag early.
+local function tag_end(html, start)
+    local quote = nil
+    for i = start, #html do
+        local c = html:sub(i, i)
+        if quote then
+            if c == quote then
+                quote = nil
+            end
+        elseif c == '"' or c == "'" then
+            quote = c
+        elseif c == ">" then
+            return i
+        end
+    end
+    return nil
+end
+
+local function src_of(tag)
+    return tag:match('[Ss][Rr][Cc]%s*=%s*"([^"]*)"')
+        or tag:match("[Ss][Rr][Cc]%s*=%s*'([^']*)'")
+        or tag:match("[Ss][Rr][Cc]%s*=%s*([^%s>]+)")
+end
+
+--- Rewrite `<img>` tags so the reader's image zoom applies, returning the new
+--- HTML and the stylesheet that goes with it.
+--
+-- MuPDF ignores `img { zoom: ... }`, and a `width="..."` attribute on the tag
+-- crashes the renderer outright (reproduced three times on the firmware
+-- build), so the only safe route is a class on a wrapper plus a CSS rule:
+-- `<div class="ka-zoom-1"><img ...></div>` and `.ka-zoom-1 img { width: Npx }`.
+-- Images whose natural size cannot be read (remote URLs, unknown formats) are
+-- left exactly as they are.
+-- @tparam string html sanitised card body
+-- @tparam string resource_dir media directory
+-- @tparam number percent 100 leaves the card untouched
+-- @treturn string html
+-- @treturn string extra stylesheet (empty when nothing was scaled)
+function Tokens.scale_images(html, resource_dir, percent)
+    html = tostring(html or "")
+    percent = tonumber(percent) or 100
+    if percent == 100 or type(resource_dir) ~= "string" or resource_dir == "" then
+        return html, ""
+    end
+    local MediaInfo = require("core.media_info")
+    local pieces = {}
+    local rules = {}
+    local index = 0
+    local pos = 1
+    while true do
+        local start = html:find("<img", pos, true) or html:find("<IMG", pos, true)
+        if not start then
+            pieces[#pieces + 1] = html:sub(pos)
+            break
+        end
+        pieces[#pieces + 1] = html:sub(pos, start - 1)
+        local stop = tag_end(html, start)
+        if not stop then
+            pieces[#pieces + 1] = html:sub(start)
+            break
+        end
+        local tag = html:sub(start, stop)
+        local src = src_of(tag)
+        local width
+        if src and not src:find("^%a+://") and not src:find("^data:") then
+            width = MediaInfo.measure(resource_dir .. "/" .. percent_decode(src))
+        end
+        if width then
+            local px = math.floor(width * IMAGE_PX_SCALE * percent / 100 + 0.5)
+            if px < 8 then
+                px = 8
+            elseif px > 4096 then
+                px = 4096
+            end
+            index = index + 1
+            local class = "ka-zoom-" .. index
+            pieces[#pieces + 1] = string.format('<div class="%s">%s</div>', class, tag)
+            rules[#rules + 1] = string.format(".%s img { width: %dpx; }", class, px)
+        else
+            pieces[#pieces + 1] = tag
+        end
+        pos = stop + 1
+    end
+    if #rules == 0 then
+        return html, ""
+    end
+    return table.concat(pieces), table.concat(rules, string.char(10))
+end
+
 --- Sanitise every inline style attribute in a card's HTML.
 function Tokens.sanitize_html(html)
     html = tostring(html or "")

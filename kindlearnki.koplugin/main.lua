@@ -243,6 +243,18 @@ function Kindlearnki:build_submenu()
             end,
         },
         {
+            text = _("显示缩放"),
+            callback = function()
+                self:prompt_card_zoom()
+            end,
+        },
+        {
+            text = _("图片缩放"),
+            callback = function()
+                self:prompt_image_zoom()
+            end,
+        },
+        {
             text = _("删除卡片库"),
             callback = function()
                 self:prompt_delete_library()
@@ -571,33 +583,52 @@ function Kindlearnki:delete_library()
     return true
 end
 
---- Ask for the study screen's horizontal margin.
+--- Ask for a number and store it in the preferences.
 --
--- A SpinWidget rather than a list of presets: the value is in design units, and
--- the range is wide enough that any fixed set of presets would be one step off
--- the reader's taste.  Only the card column moves; the deck list keeps its own.
-function Kindlearnki:prompt_study_margin()
+-- A SpinWidget rather than a list of presets: the values are percentages and
+-- design units, and any fixed set of presets would be one step off the
+-- reader's taste.  The range and the default come from `core/prefs.lua`, so
+-- the dialog and the screens can never disagree.
+local function prompt_number(key, title, info, step, hold_step)
     local ok_widget, SpinWidget = pcall(require, "ui/widget/spinwidget")
     if not ok_widget then
         Log.err("cannot load spinwidget:", SpinWidget)
         show_message(_("当前 KOReader 版本不支持数值设置。"))
         return
     end
-    local limits = Prefs.LIMITS.study_margin
+    local limits = Prefs.LIMITS[key]
     UIManager:show(SpinWidget:new{
-        title_text = _("复习页左右边距"),
-        info_text = _("与牌组页同一单位：10 即牌组页的边距，0 是贴边。"),
-        value = Prefs.get("study_margin"),
+        title_text = title,
+        info_text = info,
+        value = Prefs.get(key),
         value_min = limits.min,
         value_max = limits.max,
-        value_step = 1,
-        value_hold_step = 5,
-        default_value = Prefs.DEFAULTS.study_margin,
+        value_step = step or 1,
+        value_hold_step = hold_step or (step and step * 10 or 10),
+        default_value = Prefs.DEFAULTS[key],
         callback = function(spin)
-            local saved = Prefs.set("study_margin", spin.value)
-            show_message(string.format(_("复习页左右边距：%d"), saved))
+            local saved = Prefs.set(key, spin.value)
+            show_message(string.format("%s：%d", title, saved))
         end,
     })
+end
+
+--- Ask for the study screen's horizontal margin.
+function Kindlearnki:prompt_study_margin()
+    prompt_number("study_margin", _("复习页左右边距"),
+        _("与牌组页同一单位：10 即牌组页的边距，0 是贴边。"), 1, 5)
+end
+
+--- Ask for the card font zoom ("显示缩放" in AnkiDroid).
+function Kindlearnki:prompt_card_zoom()
+    prompt_number("card_zoom", _("显示缩放"),
+        _("卡片文字大小，百分比。100 是默认大小，调大看小字更清楚。"), 5, 25)
+end
+
+--- Ask for the image zoom ("图片缩放" in AnkiDroid).
+function Kindlearnki:prompt_image_zoom()
+    prompt_number("image_zoom", _("图片缩放"),
+        _("图片大小，相对图片原始尺寸的百分比。100 是原始大小，超过屏幕宽度时会自动缩到一屏。"), 5, 25)
 end
 
 --- Confirm, then forget the account: the key *and* the library.

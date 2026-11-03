@@ -73,4 +73,25 @@ return {
         assert(store.flushes == 1, tostring(store.flushes))
         assert(Prefs.get("study_margin") == 10)
     end,
+
+    ["both zooms default to 100, the untouched rendering"] = function()
+        Prefs.attach(fake_store())
+        -- 100 is not an arbitrary number: it is what the card looked like
+        -- before the settings existed, so an upgrade changes nothing on screen.
+        assert(Prefs.get("card_zoom") == 100, tostring(Prefs.get("card_zoom")))
+        assert(Prefs.get("image_zoom") == 100, tostring(Prefs.get("image_zoom")))
+    end,
+
+    ["the zooms are clamped to a range that still renders"] = function()
+        Prefs.attach(fake_store())
+        assert(Prefs.set("card_zoom", 10) == 50)
+        assert(Prefs.set("card_zoom", 900) == 200)
+        assert(Prefs.set("image_zoom", 1) == 50)
+        assert(Prefs.set("image_zoom", 500) == 200)
+    end,
+
+    ["a zoom stored as text is still a number"] = function()
+        Prefs.attach(fake_store({ image_zoom = "150" }))
+        assert(Prefs.get("image_zoom") == 150, tostring(Prefs.get("image_zoom")))
+    end,
 }

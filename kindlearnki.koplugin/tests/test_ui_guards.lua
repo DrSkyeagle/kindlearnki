@@ -103,4 +103,20 @@ return {
         assert(not studyview:find("text_scroll_span = Screen:scaleBySize(8)", 1, true),
             "the 8-unit scroll span is back: the right margin doubles again")
     end,
+
+    ["both zooms come from the settings, not constants"] = function()
+        local studyview = Helpers.read("ui/studyview.lua")
+        assert(studyview:find('Prefs.get("card_zoom")', 1, true),
+            "the card font size ignores the display zoom")
+        assert(studyview:find('Prefs.get("image_zoom")', 1, true),
+            "the images ignore the image zoom")
+        assert(studyview:find("Tokens.scale_images", 1, true),
+            "the image zoom is not applied to the card HTML")
+
+        local main = Helpers.read("main.lua")
+        assert(main:find("prompt_card_zoom", 1, true),
+            "no menu entry can change the display zoom")
+        assert(main:find("prompt_image_zoom", 1, true),
+            "no menu entry can change the image zoom")
+    end,
 }

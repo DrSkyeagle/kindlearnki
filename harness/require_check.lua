@@ -38,6 +38,7 @@ local default_modules = {
     "core.paths",
     "core.capabilities",
     "core.pagepress",
+    "core.media_info",
     "core.prefs",
     "core.trace",
     "proto.pb",

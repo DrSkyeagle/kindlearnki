@@ -242,7 +242,16 @@ function StudyView:_build_html(css)
     -- Inline styles inside the card are sanitised too: notes often carry
     -- `text-align:center` / margin / background on their own tags, which the
     -- template-stylesheet stripper never sees.
-    return Tokens.sanitize_html(html), (type(css) == "string" and css or "")
+    local body = Tokens.sanitize_html(html)
+    -- Image zoom runs *after* the sanitiser: the wrapper class it adds is ours,
+    -- and the sanitiser treats card-supplied classes as hostile.  At 100 this
+    -- is a no-op, so the default rendering stays byte-identical.
+    local image_css = ""
+    local zoom = Prefs.get("image_zoom")
+    if zoom ~= 100 then
+        body, image_css = Tokens.scale_images(body, data.resource_dir, zoom)
+    end
+    return body, (type(css) == "string" and css or ""), image_css
 end
 
 --==========================================================================
@@ -341,7 +350,7 @@ function StudyView:_rebuild()
     css = Tokens.strip_backgrounds(css)
     css = Tokens.tidy_declarations(css)
 
-    local html = self:_build_html(css)
+    local html, _, image_css = self:_build_html(css)
 
     -- The reference reader keeps the page wider than the text on both sides.
     -- With `@page { margin: 0 }` MuPDF no longer adds its own 2em inset, so the
@@ -379,15 +388,18 @@ function StudyView:_rebuild()
         text_h = Screen:scaleBySize(80)
     end
 
-    local font_px = Tokens.card_font_px(screen_w, screen_h)
+    local font_px = Tokens.scaled_font_px(Tokens.card_font_px(screen_w, screen_h),
+        Prefs.get("card_zoom"))
     self.scroll_widget = ScrollHtmlWidget:new{
         html_body = html,
         html_resource_directory = data.resource_dir,
         -- Template stylesheet first, our hard layout rules last: equal
         -- specificity means the later declaration wins, so a deck cannot move
-        -- the card body with its own margins.
+        -- the card body with its own margins.  The image zoom rules come after
+        -- both: they are class selectors, so they beat the bare `img` rule.
         css = BASE_CSS .. string.char(10) .. css
-            .. string.char(10) .. Tokens.layout_override_css(),
+            .. string.char(10) .. Tokens.layout_override_css()
+            .. (image_css ~= "" and (string.char(10) .. image_css) or ""),
         default_font_size = font_px,
         width = content_w,
         height = text_h,
