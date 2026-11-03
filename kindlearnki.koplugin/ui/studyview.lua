@@ -60,7 +60,7 @@ local Screen = Device.screen
 -- no outer margin.  The card keeps whatever block spacing its template has.
 local BASE_CSS = table.concat({
     "@page { margin: 0; }",
-    "body { margin: 0; padding: 1em 0.2em 0.4em 0.2em;",
+    "body { margin: 0; padding: 1em 0 0.4em 0;",
     "       background-color: #fff; color: #000;",
     "       text-align: left; line-height: 1.35; }",
     ".ka-meta { margin: 0 0 0.45em 0; color: #333; }",
@@ -344,8 +344,11 @@ function StudyView:_rebuild()
 
     -- The reference reader keeps the page wider than the text on both sides.
     -- With `@page { margin: 0 }` MuPDF no longer adds its own 2em inset, so the
-    -- inset is ours to place: title bar, text and buttons share it.
-    local inset = Screen:scaleBySize(34)
+    -- inset is ours to place: title bar, text and buttons share it.  It is the
+    -- deck list's margin (`Tokens.space.margin`), so the two screens line up at
+    -- the same left/right edge instead of the card sitting in a narrower column
+    -- (0.3.5; the card used to carry a hardcoded 34).
+    local inset = Screen:scaleBySize(Tokens.space.margin)
     local content_w = screen_w - 2 * inset
     if content_w < screen_w * 0.6 then
         content_w = math.floor(screen_w * 0.6)
