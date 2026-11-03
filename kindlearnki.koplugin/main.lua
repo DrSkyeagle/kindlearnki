@@ -27,6 +27,7 @@ local _ = require("gettext")
 local Version = require("core.version")
 local Log = require("core.log")
 local Paths = require("core.paths")
+local Prefs = require("core.prefs")
 local Trace = require("core.trace")
 local Capabilities = require("core.capabilities")
 
@@ -135,6 +136,8 @@ function Kindlearnki:init()
             ca_path = self.paths.ca_bundle,
         }
         Log.info(self.caps.summary)
+        -- Screens read their numbers from here; attach before anything paints.
+        Prefs.attach(self:settings())
         -- If the previous run died in a native call, its log tail may have been
         -- lost; the breadcrumb file always survives.
         Trace.init(self.paths.root)
@@ -231,6 +234,12 @@ function Kindlearnki:build_submenu()
             text = _("立即同步"),
             callback = function()
                 self:onKindlearnkiSync()
+            end,
+        },
+        {
+            text = _("复习页左右边距"),
+            callback = function()
+                self:prompt_study_margin()
             end,
         },
         {
@@ -560,6 +569,35 @@ function Kindlearnki:delete_library()
     end
     show_message(_("本地卡片库已删除。下次同步会从云端重新下载。"))
     return true
+end
+
+--- Ask for the study screen's horizontal margin.
+--
+-- A SpinWidget rather than a list of presets: the value is in design units, and
+-- the range is wide enough that any fixed set of presets would be one step off
+-- the reader's taste.  Only the card column moves; the deck list keeps its own.
+function Kindlearnki:prompt_study_margin()
+    local ok_widget, SpinWidget = pcall(require, "ui/widget/spinwidget")
+    if not ok_widget then
+        Log.err("cannot load spinwidget:", SpinWidget)
+        show_message(_("当前 KOReader 版本不支持数值设置。"))
+        return
+    end
+    local limits = Prefs.LIMITS.study_margin
+    UIManager:show(SpinWidget:new{
+        title_text = _("复习页左右边距"),
+        info_text = _("与牌组页同一单位：10 即牌组页的边距，0 是贴边。"),
+        value = Prefs.get("study_margin"),
+        value_min = limits.min,
+        value_max = limits.max,
+        value_step = 1,
+        value_hold_step = 5,
+        default_value = Prefs.DEFAULTS.study_margin,
+        callback = function(spin)
+            local saved = Prefs.set("study_margin", spin.value)
+            show_message(string.format(_("复习页左右边距：%d"), saved))
+        end,
+    })
 end
 
 --- Confirm, then forget the account: the key *and* the library.

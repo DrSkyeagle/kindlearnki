@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.6] — 2026-11-03
+
+### Added
+
+- 菜单新增 **复习页左右边距**（Kindlearnki → 复习页左右边距），0–40 个设计单位，
+  默认 10（就是牌组页的边距）。改完立即生效并写盘，下次打开复习页就用新值。
+
+### Fixed
+
+- **复习页右边比左边宽一倍**：`ScrollHtmlWidget` 按
+  `width - scroll_bar_width - text_scroll_span` 排正文，但控件本身仍是 `width`，
+  多出来的 `text_scroll_span`（8 个单位 = 15 px）全变成右侧空白。
+  现在传 0，左右边距相等（只剩滚动条那 2 个单位）。
+
 ## [0.3.5] — 2026-11-03
 
 ### Changed

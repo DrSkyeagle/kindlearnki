@@ -51,6 +51,7 @@ local VerticalGroup = require("ui/widget/verticalgroup")
 local logger = require("logger")
 
 local Tokens = require("ui.tokens")
+local Prefs = require("core.prefs")
 local PagePress = require("core.pagepress")
 
 local Screen = Device.screen
@@ -344,11 +345,10 @@ function StudyView:_rebuild()
 
     -- The reference reader keeps the page wider than the text on both sides.
     -- With `@page { margin: 0 }` MuPDF no longer adds its own 2em inset, so the
-    -- inset is ours to place: title bar, text and buttons share it.  It is the
-    -- deck list's margin (`Tokens.space.margin`), so the two screens line up at
-    -- the same left/right edge instead of the card sitting in a narrower column
-    -- (0.3.5; the card used to carry a hardcoded 34).
-    local inset = Screen:scaleBySize(Tokens.space.margin)
+    -- inset is ours to place: title bar, text and buttons share it.  It comes
+    -- from the settings (default: the deck list's `Tokens.space.margin`), so the
+    -- two screens line up out of the box and the reader can move the column.
+    local inset = Screen:scaleBySize(Prefs.get("study_margin"))
     local content_w = screen_w - 2 * inset
     if content_w < screen_w * 0.6 then
         content_w = math.floor(screen_w * 0.6)
@@ -394,7 +394,11 @@ function StudyView:_rebuild()
         -- A hairline page indicator instead of KOReader's default 6-unit bar:
         -- on a paged e-ink card the bar is a reminder, not a drag target.
         scroll_bar_width = Screen:scaleBySize(2),
-        text_scroll_span = Screen:scaleBySize(8),
+        -- Zero, not the default 8 units: ScrollHtmlWidget lays the text out at
+        -- `width - scroll_bar_width - text_scroll_span` but keeps the widget
+        -- itself at `width`, so any span here becomes extra blank space on the
+        -- right only.  With 8 the right margin was twice the left one (0.3.6).
+        text_scroll_span = 0,
         dialog = self,
         highlight_text_selection = true,
     }

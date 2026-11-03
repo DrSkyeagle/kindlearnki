@@ -75,4 +75,32 @@ return {
         assert(main:find("media_dir = self:media_dir()", 1, true),
             "the deck screen is opened without a media directory")
     end,
+
+    ["the study margin comes from the setting, not a constant"] = function()
+        local studyview = Helpers.read("ui/studyview.lua")
+        assert(studyview:find('Prefs.get("study_margin")', 1, true),
+            "the study screen still uses a hardcoded margin")
+        assert(not studyview:find("scaleBySize(Tokens.space.margin)", 1, true),
+            "the study screen ignores the margin setting")
+
+        local main = Helpers.read("main.lua")
+        assert(main:find("prompt_study_margin", 1, true),
+            "no menu entry can change the margin")
+        assert(main:find("Prefs.attach(self:settings())", 1, true),
+            "the preferences are never given the settings file")
+
+        local prefs = Helpers.read("core/prefs.lua")
+        assert(prefs:find("store:flush()", 1, true),
+            "a changed preference is not written to disk")
+    end,
+
+    ["the card column has no invisible right margin"] = function()
+        -- ScrollHtmlWidget lays the text out at `width - scroll_bar_width -
+        -- text_scroll_span` and keeps the widget at `width`, so a non-zero span
+        -- is blank space on the right only (0.3.5 shipped exactly that: right
+        -- margin twice the left one).
+        local studyview = Helpers.read("ui/studyview.lua")
+        assert(not studyview:find("text_scroll_span = Screen:scaleBySize(8)", 1, true),
+            "the 8-unit scroll span is back: the right margin doubles again")
+    end,
 }
